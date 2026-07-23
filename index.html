@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Pro Ten-Pin Bowling</title>
+<!-- TELEGRAM MINI APP SCRIPT -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -77,7 +79,7 @@
     pointer-events: auto;
     backdrop-filter: blur(6px);
     border: 1px solid rgba(255,255,255,0.15);
-    z-index: 60; /* ИЗМЕНЕНО: Выше, чем game-over, чтобы таблица была видна в конце игры */
+    z-index: 60;
   }
   
   .frame-row { display: flex; gap: 2px; }
@@ -152,7 +154,7 @@
   
   #game-over {
     position: absolute; inset: 0;
-    background: rgba(0,0,0,0.80); /* ИЗМЕНЕНО: Чуть прозрачнее, чтобы видеть таблицу сверху */
+    background: rgba(0,0,0,0.80);
     display: none;
     flex-direction: column;
     align-items: center;
@@ -288,6 +290,39 @@
     border-color: #9933ff;
   }
   .camera-mode-btns button:active { transform: scale(0.95); }
+
+  /* --- NETWORKING UI ADDITIONS --- */
+  #waiting-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    z-index: 55;
+    backdrop-filter: blur(5px);
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+  }
+  #waiting-overlay.show { display: flex; }
+  
+  #network-error {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 50, 50, 0.9);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: bold;
+    z-index: 70;
+    display: none;
+    text-align: center;
+  }
+  #network-error.show { display: block; }
 </style>
 </head>
 <body>
@@ -345,6 +380,13 @@
       <div class="rating" id="rating"></div>
       <button id="play-again">Play Again</button>
     </div>
+    
+    <!-- NETWORKING OVERLAYS -->
+    <div id="waiting-overlay">
+      <div class="spinner" style="margin-bottom: 16px;"></div>
+      <div id="waiting-text">Waiting for opponent...</div>
+    </div>
+    <div id="network-error">Connection lost. Retrying...</div>
   </div>
 </div>
 
@@ -358,6 +400,151 @@
     throw new Error('Libraries failed to load');
   }
 
+  // ==========================================
+  // NETWORKING LAYER
+  // ==========================================
+  class BackendAPI {
+    constructor(matchUuid, initData) {
+      this.matchUuid = matchUuid;
+      this.initData = initData;
+      this.isOnline = true;
+    }
+
+    async _fetch(endpoint, options = {}) {
+      try {
+        const headers = {
+          'Content-Type': 'application/json',
+          'Telegram-Init-Data': this.initData, // ИСПРАВЛЕНО: правильный заголовок для FastAPI
+          ...options.headers
+        };
+        
+        const response = await fetch(endpoint, { ...options, headers });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        this.isOnline = true;
+        document.getElementById('network-error').classList.remove('show');
+        return await response.json();
+      } catch (error) {
+        this.isOnline = false;
+        document.getElementById('network-error').classList.add('show');
+        console.error('API Error:', error);
+        throw error;
+      }
+    }
+
+    async loadMatch() {
+      return this._fetch(`/match/${this.matchUuid}`); // ИСПРАВЛЕНО: использование matchUuid
+    }
+
+    async finishGame(data) {
+      return this._fetch('/finish', { 
+        method: 'POST', 
+        body: JSON.stringify(data) 
+      });
+    }
+    // ИСПРАВЛЕНО: метод sendHeartbeat удален, так как его нет на бэкенде
+  }
+
+  // ==========================================
+  // TELEGRAM & TOKEN INITIALIZATION
+  // ==========================================
+  const urlParams = new URLSearchParams(window.location.search);
+  const matchUuid = urlParams.get('match_uuid'); // ИСПРАВЛЕНО: получаем правильный параметр из URL
+  let api = null;
+  let pollInterval = null;
+  const gameStartTime = Date.now();
+
+  function initTelegramAndNetwork() {
+    if (window.Telegram && window.Telegram.WebApp) {
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      tg.expand();
+      
+      const initData = tg.initData;
+      
+      if (matchUuid) {
+        api = new BackendAPI(matchUuid, initData);
+        startNetworkLoops();
+        checkInitialTurn();
+      } else {
+        // Local fallback if no token is present
+        gameState.isMyTurn = true;
+      }
+    } else {
+      setTimeout(initTelegramAndNetwork, 100);
+    }
+  }
+
+  function startNetworkLoops() {
+    // Polling every 3 seconds
+    pollInterval = setInterval(async () => {
+      if (!api.isOnline) return; 
+      try {
+        const state = await api.loadMatch();
+        updateGameStateFromServer(state);
+      } catch (e) {
+        // Auto-retry handled by next interval, UI shows "Connection lost"
+      }
+    }, 3000);
+
+    // ИСПРАВЛЕНО: блок heartbeatInterval полностью удален
+  }
+
+  function updateGameStateFromServer(state) {
+    if (state.status === 'finished') {
+      showWinnerScreen(state);
+      gameState.isMyTurn = false;
+      return;
+    }
+
+    const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
+    // ИСПРАВЛЕНО: используем current_turn_id, который должен отдавать бэкенд
+    const isMyTurnNow = state.current_turn_id?.toString() === myUserId;
+
+    if (isMyTurnNow && !gameState.isMyTurn) {
+      gameState.isMyTurn = true;
+      hideWaitingMessage();
+    } else if (!isMyTurnNow) {
+      gameState.isMyTurn = false;
+      showWaitingMessage("Waiting for opponent...");
+    }
+  }
+
+  async function checkInitialTurn() {
+    try {
+      showWaitingMessage("Loading match...");
+      const state = await api.loadMatch();
+      updateGameStateFromServer(state);
+    } catch (e) {
+      showWaitingMessage("Waiting for opponent...");
+    }
+  }
+
+  function showWaitingMessage(text) {
+    document.getElementById('waiting-text').textContent = text;
+    document.getElementById('waiting-overlay').classList.add('show');
+  }
+
+  function hideWaitingMessage() {
+    document.getElementById('waiting-overlay').classList.remove('show');
+  }
+
+  function showWinnerScreen(state) {
+    hideWaitingMessage();
+    gameState.phase = 'GAME_OVER';
+    document.getElementById('final-score').textContent = state.scores?.[9] || 0;
+    
+    const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
+    const isWinner = state.winner?.toString() === myUserId;
+    
+    document.getElementById('rating').textContent = isWinner ? '🏆 You Won!' : 'Opponent Won';
+    document.getElementById('game-over').classList.add('show');
+    gameState.isMyTurn = false;
+  }
+
+  // ==========================================
+  // GAME CONSTANTS & SETUP
+  // ==========================================
   const LANE_WIDTH = 1.0668;
   const FOUL_TO_HEAD_PIN = 18.288;
   const BALL_RADIUS = 0.109;
@@ -555,7 +742,7 @@
     const group = new THREE.Group();
     const bMat = new THREE.MeshStandardMaterial({ color: 0x9933ff, roughness: 0.1, metalness: 0.3, emissive: 0x220044, emissiveIntensity: 0.3 });
     const ball = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 32, 32), bMat);
-    ball.castShadow = false; // Убрана тень у шара
+    ball.castShadow = false;
     group.add(ball);
 
     const holeMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.95, metalness: 0.1 });
@@ -600,7 +787,8 @@
   const gameState = {
     frames: Array(10).fill(null).map(() => ({ rolls: [] })),
     currentFrame: 0, currentRollInFrame: 0, pinsStandingBeforeRoll: 10,
-    phase: 'AIMING', needsPinReset: true, settleTimer: 0, rollTimer: 0
+    phase: 'AIMING', needsPinReset: true, settleTimer: 0, rollTimer: 0,
+    isMyTurn: true
   };
 
   function resetPins() {
@@ -659,9 +847,6 @@
     }
   }
 
-  // ============================================================
-  // ПОДСЧЁТ ОЧКОВ ПО ПРАВИЛАМ TEN-PIN BOWLING
-  // ============================================================
   function calculateScores() {
     const scores = [];
     let rollIndex = 0;
@@ -799,13 +984,43 @@
     document.getElementById('game-over').classList.add('show');
   }
 
-  function finishGame() {
+  // --- NETWORKING ADDITION: Modified finishGame ---
+  async function finishGame() {
     gameState.phase = 'GAME_OVER';
     removeFallenPins();
     resetBall();
     updateScoreboard();
     updateInfo();
-    showGameOver();
+    
+    if (api && matchUuid) { // ИСПРАВЛЕНО: использование matchUuid
+      showWaitingMessage("Submitting score...");
+      try {
+        const scores = calculateScores();
+        const finalScore = scores[9] || 0;
+        const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id; // ИСПРАВЛЕНО: получаем ID для отправки
+        
+        await api.finishGame({
+          telegram_id: myUserId,       // ИСПРАВЛЕНО: добавлено обязательное поле
+          match_uuid: matchUuid,       // ИСПРАВЛЕНО: добавлено обязательное поле
+          score: finalScore,
+          frames: gameState.frames
+        });
+        
+        hideWaitingMessage();
+        document.getElementById('final-score').textContent = finalScore;
+        document.getElementById('rating').textContent = "Your score has been submitted.";
+        document.getElementById('game-over').classList.add('show');
+        gameState.isMyTurn = false;
+      } catch (e) {
+        hideWaitingMessage();
+        document.getElementById('final-score').textContent = "Error";
+        document.getElementById('rating').textContent = "Submission pending (offline).";
+        document.getElementById('game-over').classList.add('show');
+        gameState.isMyTurn = false;
+      }
+    } else {
+      showGameOver();
+    }
   }
 
   function onRollComplete() {
@@ -900,8 +1115,9 @@
   }
 
   function onPointerDown(e) {
+    if (gameState.phase !== 'AIMING' || !gameState.isMyTurn) return;
+    
     e.preventDefault();
-    if (gameState.phase !== 'AIMING') return;
     const c = getCanvasCoords(e);
     touchStart = { x: c.x, y: c.y };
     currentTouch = { x: c.x, y: c.y };
@@ -909,8 +1125,8 @@
   }
 
   function onPointerMove(e) {
+    if (!touchStart || !gameState.isMyTurn) return;
     e.preventDefault();
-    if (!touchStart) return;
     const c = getCanvasCoords(e);
     currentTouch = { x: c.x, y: c.y };
     const dx = currentTouch.x - touchStart.x;
@@ -924,8 +1140,8 @@
   }
 
   function onPointerUp(e) {
+    if (!touchStart || !gameState.isMyTurn) return;
     e.preventDefault();
-    if (!touchStart) return;
     document.getElementById('power-meter').classList.remove('active');
     aimLine.visible = false;
     if (throwPower > 0.05) throwBall();
@@ -1129,6 +1345,13 @@
     updateScoreboard(); 
     updateInfo();
     document.getElementById('game-over').classList.remove('show');
+    hideWaitingMessage();
+    
+    if (api && matchUuid) { // ИСПРАВЛЕНО: использование matchUuid
+      checkInitialTurn();
+    } else {
+      gameState.isMyTurn = true;
+    }
   }
 
   document.getElementById('reset-btn').addEventListener('click', resetGame);
@@ -1142,6 +1365,8 @@
   updateScoreboard();
   updateInfo();
   document.getElementById('loading').style.display = 'none';
+  
+  initTelegramAndNetwork();
   animate();
 </script>
 </body>
