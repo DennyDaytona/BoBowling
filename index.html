@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Pro Ten-Pin Bowling</title>
-<!-- TELEGRAM MINI APP SCRIPT -->
+<title>BoBowling - One Frame at a Time</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -152,7 +151,7 @@
   }
   #message.show { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
   
-  #game-over {
+  #frame-over {
     position: absolute; inset: 0;
     background: rgba(0,0,0,0.80);
     display: none;
@@ -163,11 +162,12 @@
     z-index: 50;
     backdrop-filter: blur(10px);
   }
-  #game-over.show { display: flex; }
-  #game-over h1 { font-size: 36px; margin-bottom: 12px; text-shadow: 0 0 20px rgba(255,215,0,0.6); }
-  #game-over .final-score { font-size: 72px; color: #ffd700; margin-bottom: 8px; font-weight: 900; text-shadow: 0 0 30px rgba(255,215,0,0.8); }
-  #game-over .rating { font-size: 18px; margin-bottom: 30px; opacity: 0.9; }
-  #play-again {
+  #frame-over.show { display: flex; }
+  #frame-over h1 { font-size: 28px; margin-bottom: 8px; text-shadow: 0 0 20px rgba(255,215,0,0.6); }
+  #frame-over .frame-result { font-size: 36px; color: #ffd700; margin-bottom: 8px; font-weight: 900; }
+  #frame-over .frame-detail { font-size: 16px; margin-bottom: 20px; opacity: 0.9; }
+  #frame-over .waiting-msg { font-size: 14px; opacity: 0.7; margin-bottom: 16px; }
+  #frame-done-btn {
     padding: 16px 40px;
     font-size: 18px;
     background: #ffd700;
@@ -179,7 +179,7 @@
     font-weight: bold;
     box-shadow: 0 4px 15px rgba(255,215,0,0.4);
   }
-  #play-again:active { transform: scale(0.95); }
+  #frame-done-btn:active { transform: scale(0.95); }
   
   #reset-btn {
     position: absolute;
@@ -291,7 +291,7 @@
   }
   .camera-mode-btns button:active { transform: scale(0.95); }
 
-  /* --- NETWORKING UI ADDITIONS --- */
+  /* NETWORKING UI */
   #waiting-overlay {
     position: absolute; inset: 0;
     background: rgba(0,0,0,0.7);
@@ -323,6 +323,35 @@
     text-align: center;
   }
   #network-error.show { display: block; }
+
+  #game-over {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.80);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+  }
+  #game-over.show { display: flex; }
+  #game-over h1 { font-size: 28px; margin-bottom: 8px; text-shadow: 0 0 20px rgba(255,215,0,0.6); }
+  #game-over .final-score { font-size: 48px; color: #ffd700; margin-bottom: 4px; font-weight: 900; }
+  #game-over .final-detail { font-size: 16px; margin-bottom: 20px; opacity: 0.9; }
+  #game-over .opponent-score { font-size: 14px; opacity: 0.7; margin-bottom: 20px; }
+  #close-btn {
+    padding: 16px 40px;
+    font-size: 18px;
+    background: #ffd700;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    pointer-events: auto;
+    font-weight: bold;
+  }
+  #close-btn:active { transform: scale(0.95); }
 </style>
 </head>
 <body>
@@ -331,14 +360,12 @@
     <canvas id="canvas"></canvas>
     <div id="loading">
       <div class="spinner"></div>
-      <div>Loading Bowling Simulator...</div>
+      <div>Loading Bowling...</div>
     </div>
     <div id="error">
       <div>⚠️ Failed to load 3D libraries</div>
       <div style="font-size: 14px; margin-top: 10px; color: #aaa;">
-        Please check your internet connection. <br>
-        If opening via file://, some strict browsers block external scripts. <br>
-        Try using a simple local server (e.g., VS Code "Live Server" extension).
+        Please check your internet connection.
       </div>
     </div>
     <div id="ui">
@@ -346,8 +373,8 @@
       <div id="info">Frame 1 • Roll 1</div>
       <div id="power-meter"><div id="power-fill"></div></div>
       <div id="message"></div>
-      <button id="reset-btn">Reset Game</button>
-      <button id="camera-settings-btn">📷 Camera</button>
+      <button id="reset-btn">Reset</button>
+      <button id="camera-settings-btn">📷</button>
       <div id="camera-settings-panel">
         <h3>📷 Camera Settings</h3>
         <div class="setting-row">
@@ -367,21 +394,32 @@
           <input type="range" id="cam-fov" min="20" max="90" step="1" value="45">
         </div>
         <div class="camera-mode-btns">
-          <button id="mode-aim" class="active">Aim View</button>
-          <button id="mode-roll">Roll View</button>
-          <button id="mode-lock">Lock Pins</button>
+          <button id="mode-aim" class="active">Aim</button>
+          <button id="mode-roll">Roll</button>
+          <button id="mode-lock">Lock</button>
         </div>
       </div>
-      <div id="instructions">Drag UP to set power<br>Drag LEFT/RIGHT to aim</div>
+      <div id="instructions">Drag UP for power<br>LEFT/RIGHT to aim</div>
     </div>
+    
+    <!-- Frame Over Screen -->
+    <div id="frame-over">
+      <h1 id="frame-title">Frame Complete!</h1>
+      <div class="frame-result" id="frame-result-text">0</div>
+      <div class="frame-detail" id="frame-detail-text"></div>
+      <div class="waiting-msg" id="frame-waiting-msg">Submitting your result...</div>
+      <button id="frame-done-btn">OK</button>
+    </div>
+    
+    <!-- Game Over Screen -->
     <div id="game-over">
       <h1>Game Over</h1>
       <div class="final-score" id="final-score">0</div>
-      <div class="rating" id="rating"></div>
-      <button id="play-again">Play Again</button>
+      <div class="final-detail" id="final-detail"></div>
+      <div class="opponent-score" id="opponent-score"></div>
+      <button id="close-btn">Close</button>
     </div>
     
-    <!-- NETWORKING OVERLAYS -->
     <div id="waiting-overlay">
       <div class="spinner" style="margin-bottom: 16px;"></div>
       <div id="waiting-text">Waiting for opponent...</div>
@@ -404,9 +442,10 @@
   // NETWORKING LAYER
   // ==========================================
   class BackendAPI {
-    constructor(matchUuid, initData) {
+    constructor(matchUuid, initData, baseUrl) {
       this.matchUuid = matchUuid;
       this.initData = initData;
+      this.baseUrl = baseUrl || '';
       this.isOnline = true;
     }
 
@@ -414,11 +453,12 @@
       try {
         const headers = {
           'Content-Type': 'application/json',
-          'Telegram-Init-Data': this.initData, // ИСПРАВЛЕНО: правильный заголовок для FastAPI
+          'Telegram-Init-Data': this.initData,
           ...options.headers
         };
         
-        const response = await fetch(endpoint, { ...options, headers });
+        const url = this.baseUrl + endpoint;
+        const response = await fetch(url, { ...options, headers });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         this.isOnline = true;
@@ -433,26 +473,44 @@
     }
 
     async loadMatch() {
-      return this._fetch(`/match/${this.matchUuid}`); // ИСПРАВЛЕНО: использование matchUuid
+      return this._fetch(`/match/${this.matchUuid}`);
     }
 
-    async finishGame(data) {
-      return this._fetch('/finish', { 
+    async submitFrame(data) {
+      return this._fetch('/submit_frame', { 
         method: 'POST', 
         body: JSON.stringify(data) 
       });
     }
-    // ИСПРАВЛЕНО: метод sendHeartbeat удален, так как его нет на бэкенде
   }
 
   // ==========================================
-  // TELEGRAM & TOKEN INITIALIZATION
+  // TELEGRAM & INIT
   // ==========================================
   const urlParams = new URLSearchParams(window.location.search);
-  const matchUuid = urlParams.get('match_uuid'); // ИСПРАВЛЕНО: получаем правильный параметр из URL
+  const matchUuid = urlParams.get('match_uuid');
   let api = null;
   let pollInterval = null;
-  const gameStartTime = Date.now();
+  let myUserId = null;
+  let myPlayerData = null;
+  let matchData = null;
+  let currentFrameNumber = 0; // 0-based
+  let isFrameActive = false;
+
+  // ==========================================
+  // GAME STATE (single frame only)
+  // ==========================================
+  const gameState = {
+    frames: Array(10).fill(null).map(() => ({ rolls: [] })),
+    currentFrame: 0,
+    currentRollInFrame: 0,
+    pinsStandingBeforeRoll: 10,
+    phase: 'AIMING', // AIMING, ROLLING, SETTLING, FRAME_DONE
+    needsPinReset: true,
+    settleTimer: 0,
+    rollTimer: 0,
+    isMyTurn: false
+  };
 
   function initTelegramAndNetwork() {
     if (window.Telegram && window.Telegram.WebApp) {
@@ -460,15 +518,20 @@
       tg.ready();
       tg.expand();
       
+      myUserId = tg.initDataUnsafe?.user?.id?.toString();
       const initData = tg.initData;
       
       if (matchUuid) {
-        api = new BackendAPI(matchUuid, initData);
+        // Determine base URL - use current origin for production, or configured URL
+        const baseUrl = window.location.origin;
+        api = new BackendAPI(matchUuid, initData, baseUrl);
         startNetworkLoops();
         checkInitialTurn();
       } else {
-        // Local fallback if no token is present
+        // Offline mode - play full game
         gameState.isMyTurn = true;
+        isFrameActive = true;
+        hideWaitingMessage();
       }
     } else {
       setTimeout(initTelegramAndNetwork, 100);
@@ -476,38 +539,76 @@
   }
 
   function startNetworkLoops() {
-    // Polling every 3 seconds
+    // Poll every 3 seconds
     pollInterval = setInterval(async () => {
-      if (!api.isOnline) return; 
+      if (!api || !api.isOnline) return;
       try {
         const state = await api.loadMatch();
         updateGameStateFromServer(state);
       } catch (e) {
-        // Auto-retry handled by next interval, UI shows "Connection lost"
+        // Auto-retry
       }
     }, 3000);
-
-    // ИСПРАВЛЕНО: блок heartbeatInterval полностью удален
   }
 
   function updateGameStateFromServer(state) {
+    matchData = state;
+    
     if (state.status === 'finished') {
-      showWinnerScreen(state);
+      showGameOver(state);
       gameState.isMyTurn = false;
+      isFrameActive = false;
       return;
     }
 
-    const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
-    // ИСПРАВЛЕНО: используем current_turn_id, который должен отдавать бэкенд
     const isMyTurnNow = state.current_turn_id?.toString() === myUserId;
-
+    
     if (isMyTurnNow && !gameState.isMyTurn) {
+      // It's our turn now!
       gameState.isMyTurn = true;
+      isFrameActive = true;
+      currentFrameNumber = state.current_frame || 0;
+      // Sync frames from server
+      syncFramesFromServer(state);
       hideWaitingMessage();
-    } else if (!isMyTurnNow) {
+      prepareForFrame();
+    } else if (!isMyTurnNow && gameState.isMyTurn) {
       gameState.isMyTurn = false;
+      isFrameActive = false;
+      showWaitingMessage("Waiting for opponent...");
+    } else if (!isMyTurnNow) {
       showWaitingMessage("Waiting for opponent...");
     }
+  }
+
+  function syncFramesFromServer(state) {
+    // Find our player data
+    if (!myUserId) return;
+    const myPlayer = state.players.find(p => p.telegram_id?.toString() === myUserId);
+    if (!myPlayer) return;
+    
+    myPlayerData = myPlayer;
+    
+    // Reset local frames and fill from server
+    for (const f of gameState.frames) f.rolls.length = 0;
+    
+    if (myPlayer.frames) {
+      for (const sf of myPlayer.frames) {
+        const frameIdx = sf.frame_number;
+        if (frameIdx >= 0 && frameIdx < 10) {
+          const rolls = [];
+          if (sf.roll1 > 0) rolls.push(sf.roll1);
+          if (sf.roll2 > 0) rolls.push(sf.roll2);
+          if (sf.roll3 > 0) rolls.push(sf.roll3);
+          gameState.frames[frameIdx].rolls = rolls;
+        }
+      }
+    }
+    
+    // Determine what frame we're playing
+    currentFrameNumber = state.current_frame || 0;
+    gameState.currentFrame = currentFrameNumber;
+    gameState.currentRollInFrame = 0;
   }
 
   async function checkInitialTurn() {
@@ -529,17 +630,118 @@
     document.getElementById('waiting-overlay').classList.remove('show');
   }
 
-  function showWinnerScreen(state) {
-    hideWaitingMessage();
-    gameState.phase = 'GAME_OVER';
-    document.getElementById('final-score').textContent = state.scores?.[9] || 0;
+  function prepareForFrame() {
+    // Reset state for a new frame
+    gameState.currentRollInFrame = 0;
+    gameState.pinsStandingBeforeRoll = 10;
+    gameState.phase = 'AIMING';
+    gameState.needsPinReset = true;
+    gameState.rollTimer = 0;
+    gameState.settleTimer = 0;
     
-    const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
+    // Close any overlays
+    document.getElementById('frame-over').classList.remove('show');
+    document.getElementById('game-over').classList.remove('show');
+    
+    resetPins();
+    resetBall();
+    updateScoreboard();
+    updateInfo();
+    hideWaitingMessage();
+  }
+
+  function showFrameOver(frameIdx, roll1, roll2, roll3) {
+    isFrameActive = false;
+    gameState.phase = 'FRAME_DONE';
+    
+    const frameNum = frameIdx + 1;
+    document.getElementById('frame-title').textContent = `Frame ${frameNum} Complete!`;
+    
+    let resultText = '';
+    let detailText = '';
+    
+    if (frameIdx < 9) {
+      if (roll1 === 10) {
+        resultText = 'STRIKE!';
+        detailText = '10 pins';
+      } else if (roll1 + roll2 === 10) {
+        resultText = 'SPARE!';
+        detailText = `${roll1} + ${roll2} = 10`;
+      } else {
+        resultText = `${roll1 + roll2} pins`;
+        detailText = `${roll1} + ${roll2}`;
+      }
+    } else {
+      resultText = `${roll1 + roll2 + roll3} pins`;
+      detailText = `${roll1}, ${roll2}, ${roll3}`;
+      if (roll1 === 10) detailText = `X, ${roll2}, ${roll3}`;
+      if (roll2 === 10) detailText = `${roll1}, X, ${roll3}`;
+      if (roll3 === 10) detailText = `${roll1}, ${roll2}, X`;
+      if (roll1 === 10 && roll2 === 10) detailText = `X, X, ${roll3}`;
+    }
+    
+    document.getElementById('frame-result-text').textContent = resultText;
+    document.getElementById('frame-detail-text').textContent = detailText;
+    document.getElementById('frame-waiting-msg').textContent = 'Submitting your result...';
+    document.getElementById('frame-done-btn').style.display = 'none';
+    document.getElementById('frame-over').classList.add('show');
+    
+    // Submit to server
+    submitFrameToServer(frameIdx, roll1, roll2, roll3);
+  }
+
+  async function submitFrameToServer(frameIdx, roll1, roll2, roll3) {
+    if (!api || !matchUuid) {
+      // Offline mode - just acknowledge
+      document.getElementById('frame-waiting-msg').textContent = 'Frame saved locally.';
+      document.getElementById('frame-done-btn').style.display = 'block';
+      return;
+    }
+
+    try {
+      const result = await api.submitFrame({
+        telegram_id: parseInt(myUserId),
+        match_uuid: matchUuid,
+        frame_number: frameIdx,
+        roll1: roll1,
+        roll2: roll2,
+        roll3: roll3
+      });
+      
+      if (result.status === 'finished') {
+        document.getElementById('frame-waiting-msg').textContent = 'Game over!';
+        document.getElementById('frame-done-btn').style.display = 'none';
+        // Will be updated by poll
+      } else if (result.status === 'next_player' || result.status === 'continue') {
+        document.getElementById('frame-waiting-msg').textContent = 'Submitted! Waiting for next turn...';
+        document.getElementById('frame-done-btn').style.display = 'block';
+        gameState.isMyTurn = false;
+      }
+    } catch (e) {
+      document.getElementById('frame-waiting-msg').textContent = 'Error submitting. Will retry...';
+      document.getElementById('frame-done-btn').style.display = 'block';
+    }
+  }
+
+  function showGameOver(state) {
+    hideWaitingMessage();
+    isFrameActive = false;
+    gameState.phase = 'GAME_OVER';
+    
+    // Find our score
+    const myPlayer = state.players.find(p => p.telegram_id?.toString() === myUserId);
+    const otherPlayer = state.players.find(p => p.telegram_id?.toString() !== myUserId);
+    
+    const myScore = myPlayer?.score || 0;
+    const otherScore = otherPlayer?.score || 0;
+    const otherName = otherPlayer?.first_name || 'Opponent';
+    
     const isWinner = state.winner?.toString() === myUserId;
     
-    document.getElementById('rating').textContent = isWinner ? '🏆 You Won!' : 'Opponent Won';
+    document.getElementById('final-score').textContent = myScore;
+    document.getElementById('final-detail').textContent = isWinner ? '🏆 You Win!' : 'You Lost';
+    document.getElementById('opponent-score').textContent = `${otherName}: ${otherScore}`;
     document.getElementById('game-over').classList.add('show');
-    gameState.isMyTurn = false;
   }
 
   // ==========================================
@@ -784,12 +986,6 @@
 
   let pins = [];
   const rolls = [];
-  const gameState = {
-    frames: Array(10).fill(null).map(() => ({ rolls: [] })),
-    currentFrame: 0, currentRollInFrame: 0, pinsStandingBeforeRoll: 10,
-    phase: 'AIMING', needsPinReset: true, settleTimer: 0, rollTimer: 0,
-    isMyTurn: true
-  };
 
   function resetPins() {
     for (const pin of pins) { world.removeBody(pin.body); scene.remove(pin.mesh); }
@@ -847,99 +1043,15 @@
     }
   }
 
-  function calculateScores() {
-    const scores = [];
-    let rollIndex = 0;
-    let cumulativeScore = 0;
-
-    function getRoll(index) {
-      return rolls[index] !== undefined ? rolls[index] : null;
-    }
-
-    for (let frame = 0; frame < 10; frame++) {
-      if (frame < 9) {
-        const first = getRoll(rollIndex);
-        if (first === null) {
-          scores.push(null);
-          continue;
-        }
-
-        if (first === 10) {
-          const bonus1 = getRoll(rollIndex + 1);
-          const bonus2 = getRoll(rollIndex + 2);
-          if (bonus1 === null || bonus2 === null) {
-            scores.push(null);
-            continue;
-          }
-          cumulativeScore += 10 + bonus1 + bonus2;
-          scores.push(cumulativeScore);
-          rollIndex += 1;
-        } else {
-          const second = getRoll(rollIndex + 1);
-          if (second === null) {
-            scores.push(null);
-            continue;
-          }
-          if (first + second === 10) {
-            const bonus = getRoll(rollIndex + 2);
-            if (bonus === null) {
-              scores.push(null);
-              continue;
-            }
-            cumulativeScore += 10 + bonus;
-          } else {
-            cumulativeScore += first + second;
-          }
-          scores.push(cumulativeScore);
-          rollIndex += 2;
-        }
-      } else {
-        const first = getRoll(rollIndex);
-        if (first === null) {
-          scores.push(null);
-          continue;
-        }
-        let frameScore = 0;
-        if (first === 10) {
-          const second = getRoll(rollIndex + 1);
-          const third = getRoll(rollIndex + 2);
-          if (second === null || third === null) {
-            scores.push(null);
-            continue;
-          }
-          frameScore = 10 + second + third;
-        } else {
-          const second = getRoll(rollIndex + 1);
-          if (second === null) {
-            scores.push(null);
-            continue;
-          }
-          if (first + second === 10) {
-            const bonus = getRoll(rollIndex + 2);
-            if (bonus === null) {
-              scores.push(null);
-              continue;
-            }
-            frameScore = 10 + bonus;
-          } else {
-            frameScore = first + second;
-          }
-        }
-        cumulativeScore += frameScore;
-        scores.push(cumulativeScore);
-        rollIndex = rolls.length;
-      }
-    }
-    return scores;
-  }
-
   function updateScoreboard() {
     const sb = document.getElementById('scoreboard');
-    const scores = calculateScores();
+    // Use server frames if available
+    let displayFrames = gameState.frames;
+    
     let html = '<div class="frame-row">';
     for (let f = 0; f < 10; f++) {
-      const isCurrent = f === gameState.currentFrame && gameState.phase !== 'GAME_OVER';
-      const frameRolls = gameState.frames[f].rolls;
+      const isCurrent = f === currentFrameNumber && gameState.phase !== 'FRAME_DONE' && gameState.phase !== 'GAME_OVER';
+      const frameRolls = displayFrames[f].rolls;
       html += `<div class="frame ${f === 9 ? 'tenth' : ''} ${isCurrent ? 'current' : ''}">`;
       html += `<div class="frame-label">${f + 1}</div><div class="frame-rolls">`;
       if (f < 9) {
@@ -960,13 +1072,22 @@
           else html += `<span>${r === 0 ? '-' : r}</span>`;
         }
       }
-      html += `</div><div class="frame-score">${scores[f] !== null ? scores[f] : ''}</div></div>`;
+      html += `</div><div class="frame-score"></div></div>`;
     }
     sb.innerHTML = html + '</div>';
   }
 
   function updateInfo() {
-    document.getElementById('info').textContent = gameState.phase === 'GAME_OVER' ? 'Game Over' : `Frame ${gameState.currentFrame + 1} • Roll ${gameState.currentRollInFrame + 1}`;
+    const frameNum = currentFrameNumber + 1;
+    const rollNum = gameState.currentRollInFrame + 1;
+    
+    if (gameState.phase === 'GAME_OVER') {
+      document.getElementById('info').textContent = 'Game Over';
+    } else if (gameState.phase === 'FRAME_DONE') {
+      document.getElementById('info').textContent = `Frame ${frameNum} done`;
+    } else {
+      document.getElementById('info').textContent = `Frame ${frameNum} • Roll ${rollNum}`;
+    }
   }
 
   function showMessage(text) {
@@ -975,84 +1096,42 @@
     setTimeout(() => msg.classList.remove('show'), 2000);
   }
 
-  function showGameOver() {
-    const scores = calculateScores();
-    const finalScore = scores[9] || 0;
-    document.getElementById('final-score').textContent = finalScore;
-    let rating = finalScore === 300 ? '🏆 PERFECT GAME!' : finalScore >= 250 ? '🌟 Outstanding!' : finalScore >= 200 ? '👏 Great Game!' : finalScore >= 150 ? '👍 Good Game' : finalScore >= 100 ? 'Nice Try!' : 'Keep Practicing!';
-    document.getElementById('rating').textContent = rating;
-    document.getElementById('game-over').classList.add('show');
-  }
-
-  // --- NETWORKING ADDITION: Modified finishGame ---
-  async function finishGame() {
-    gameState.phase = 'GAME_OVER';
-    removeFallenPins();
-    resetBall();
-    updateScoreboard();
-    updateInfo();
-    
-    if (api && matchUuid) { // ИСПРАВЛЕНО: использование matchUuid
-      showWaitingMessage("Submitting score...");
-      try {
-        const scores = calculateScores();
-        const finalScore = scores[9] || 0;
-        const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id; // ИСПРАВЛЕНО: получаем ID для отправки
-        
-        await api.finishGame({
-          telegram_id: myUserId,       // ИСПРАВЛЕНО: добавлено обязательное поле
-          match_uuid: matchUuid,       // ИСПРАВЛЕНО: добавлено обязательное поле
-          score: finalScore,
-          frames: gameState.frames
-        });
-        
-        hideWaitingMessage();
-        document.getElementById('final-score').textContent = finalScore;
-        document.getElementById('rating').textContent = "Your score has been submitted.";
-        document.getElementById('game-over').classList.add('show');
-        gameState.isMyTurn = false;
-      } catch (e) {
-        hideWaitingMessage();
-        document.getElementById('final-score').textContent = "Error";
-        document.getElementById('rating').textContent = "Submission pending (offline).";
-        document.getElementById('game-over').classList.add('show');
-        gameState.isMyTurn = false;
-      }
-    } else {
-      showGameOver();
-    }
-  }
-
   function onRollComplete() {
     const standingNow = countStandingPins();
     const pinsKnocked = Math.max(0, gameState.pinsStandingBeforeRoll - standingNow);
 
     rolls.push(pinsKnocked);
-    gameState.frames[gameState.currentFrame].rolls.push(pinsKnocked);
+    gameState.frames[currentFrameNumber].rolls.push(pinsKnocked);
 
-    if (gameState.currentFrame < 9) {
+    const frameIdx = currentFrameNumber;
+    const frameRolls = gameState.frames[frameIdx].rolls;
+
+    if (frameIdx < 9) {
+      // First 9 frames
       if (gameState.currentRollInFrame === 0) {
         if (pinsKnocked === 10) {
+          // STRIKE - frame is done
           showMessage('STRIKE!');
-          gameState.currentFrame++;
-          gameState.currentRollInFrame = 0;
-          gameState.pinsStandingBeforeRoll = 10;
-          gameState.needsPinReset = true;
+          // Show frame over with strike
+          showFrameOver(frameIdx, 10, 0, 0);
+          return;
         } else {
+          // First roll, not strike - continue to second roll
           gameState.currentRollInFrame = 1;
           gameState.pinsStandingBeforeRoll = standingNow;
           gameState.needsPinReset = false;
         }
-      } else {
+      } else if (gameState.currentRollInFrame === 1) {
+        // Second roll
         if (standingNow === 0) showMessage('SPARE!');
-        gameState.currentFrame++;
-        gameState.currentRollInFrame = 0;
-        gameState.pinsStandingBeforeRoll = 10;
-        gameState.needsPinReset = true;
+        // Frame is done
+        const roll1 = frameRolls[0];
+        const roll2 = pinsKnocked;
+        showFrameOver(frameIdx, roll1, roll2, 0);
+        return;
       }
     } else {
-      const frameRolls = gameState.frames[9].rolls;
-
+      // 10th frame
       if (gameState.currentRollInFrame === 0) {
         if (pinsKnocked === 10) {
           showMessage('STRIKE!');
@@ -1066,6 +1145,7 @@
       } else if (gameState.currentRollInFrame === 1) {
         const firstRoll = frameRolls[0];
         if (firstRoll === 10) {
+          // First was strike
           if (pinsKnocked === 10) {
             showMessage('STRIKE!');
             resetPins();
@@ -1080,18 +1160,21 @@
           gameState.pinsStandingBeforeRoll = 10;
           gameState.currentRollInFrame = 2;
         } else {
-          finishGame();
+          // No strike/spare in 10th - done
+          showFrameOver(frameIdx, firstRoll, pinsKnocked, 0);
           return;
         }
       } else if (gameState.currentRollInFrame === 2) {
-        if (pinsKnocked === 10) {
-          showMessage('STRIKE!');
-        }
-        finishGame();
+        if (pinsKnocked === 10) showMessage('STRIKE!');
+        // Done
+        const roll1 = frameRolls[0];
+        const roll2 = frameRolls[1];
+        showFrameOver(frameIdx, roll1, roll2, pinsKnocked);
         return;
       }
     }
 
+    // If we got here, we need to prep for next roll (not frame done yet)
     removeFallenPins();
     if (gameState.needsPinReset) {
       resetPins();
@@ -1115,7 +1198,7 @@
   }
 
   function onPointerDown(e) {
-    if (gameState.phase !== 'AIMING' || !gameState.isMyTurn) return;
+    if (gameState.phase !== 'AIMING' || !gameState.isMyTurn || !isFrameActive) return;
     
     e.preventDefault();
     const c = getCanvasCoords(e);
@@ -1340,22 +1423,39 @@
     gameState.needsPinReset = true;
     gameState.rollTimer = 0;
     gameState.settleTimer = 0;
+    currentFrameNumber = 0;
+    isFrameActive = false;
     resetPins(); 
     resetBall(); 
     updateScoreboard(); 
     updateInfo();
+    document.getElementById('frame-over').classList.remove('show');
     document.getElementById('game-over').classList.remove('show');
     hideWaitingMessage();
     
-    if (api && matchUuid) { // ИСПРАВЛЕНО: использование matchUuid
+    if (api && matchUuid) {
       checkInitialTurn();
     } else {
       gameState.isMyTurn = true;
+      isFrameActive = true;
     }
   }
 
+  // Frame done button - closes overlay
+  document.getElementById('frame-done-btn').addEventListener('click', () => {
+    document.getElementById('frame-over').classList.remove('show');
+    // Poll will pick up next turn
+    showWaitingMessage("Waiting for opponent...");
+  });
+
+  // Close button for game over
+  document.getElementById('close-btn').addEventListener('click', () => {
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.close();
+    }
+  });
+
   document.getElementById('reset-btn').addEventListener('click', resetGame);
-  document.getElementById('play-again').addEventListener('click', resetGame);
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 100));
 
