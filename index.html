@@ -70,7 +70,7 @@
   <div id="waiting-overlay">
     <div class="spinner"></div>
     <div id="waiting-text">Сейчас не ваш ход.</div>
-    <div style="margin-top: 10px; font-size: 14px; opacity: 0.7;">Закройте это окно и дождитесь своей кнопки в чате.</div>
+    <div style="margin-top: 10px; font-size: 14px; opacity: 0.7;">Закройте это окно и дождитесь своей ссылки в чате.</div>
   </div>
 </div>
 
@@ -102,7 +102,7 @@
   tg.expand();
   log("Telegram WebApp готов");
 
-  // Читаем start_param (работает ТОЛЬКО с кнопками WebApp!)
+  // Читаем start_param (приходит через Menu Button после deep link)
   const startParam = tg.initDataUnsafe.start_param;
   log(`start_param: ${startParam || 'НЕ НАЙДЕН'}`);
 
@@ -128,8 +128,10 @@
       log(`Frame: ${currentFrameNum}`);
       log(`P1 Score: ${p1Score}, P2 Score: ${p2Score}`);
     } else {
-      log("ОШИБКА: Неверный формат start_param", "error");
+      log(`ОШИБКА: Неверный формат start_param (частей: ${parts.length})`, "error");
     }
+  } else {
+    log("ОШИБКА: start_param отсутствует", "error");
   }
 
   const myUserId = tg.initDataUnsafe?.user?.id;
