@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Bo Bowling</title>
+<title>Pro Ten-Pin Bowling</title>
 <!-- TELEGRAM MINI APP SCRIPT -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -207,35 +207,122 @@
     border-radius: 6px;
     line-height: 1.4;
   }
-  
-  /* ── WAITING OVERLAY ── */
+
+  #camera-settings-btn {
+    position: absolute;
+    bottom: 20px;
+    right: 16px;
+    padding: 10px 14px;
+    background: rgba(153, 51, 255, 0.3);
+    color: #fff;
+    border: 1px solid rgba(153, 51, 255, 0.6);
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: auto;
+    backdrop-filter: blur(4px);
+    font-weight: 600;
+    z-index: 15;
+  }
+  #camera-settings-btn:active { transform: scale(0.95); }
+
+  #camera-settings-panel {
+    position: absolute;
+    bottom: 60px;
+    right: 16px;
+    width: 220px;
+    background: rgba(0, 0, 0, 0.92);
+    color: #fff;
+    border: 1px solid rgba(153, 51, 255, 0.5);
+    border-radius: 8px;
+    padding: 12px;
+    pointer-events: auto;
+    backdrop-filter: blur(8px);
+    display: none;
+    z-index: 15;
+    font-size: 11px;
+  }
+  #camera-settings-panel.show { display: block; }
+  #camera-settings-panel h3 {
+    font-size: 13px;
+    margin-bottom: 10px;
+    color: #9933ff;
+    text-align: center;
+  }
+  .setting-row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+  }
+  .setting-row label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    opacity: 0.8;
+  }
+  .setting-row label span {
+    color: #ffd700;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+  }
+  .setting-row input[type="range"] {
+    width: 100%;
+    accent-color: #9933ff;
+    height: 4px;
+  }
+  .camera-mode-btns {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .camera-mode-btns button {
+    flex: 1;
+    padding: 5px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    font-size: 10px;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .camera-mode-btns button.active {
+    background: rgba(153, 51, 255, 0.5);
+    border-color: #9933ff;
+  }
+  .camera-mode-btns button:active { transform: scale(0.95); }
+
+  /* --- NETWORKING UI ADDITIONS --- */
   #waiting-overlay {
     position: absolute; inset: 0;
-    background: rgba(0,0,0,0.78);
+    background: rgba(0,0,0,0.7);
     display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     color: #fff;
     z-index: 55;
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(5px);
     font-size: 20px;
     font-weight: bold;
     text-align: center;
     padding: 20px;
   }
   #waiting-overlay.show { display: flex; }
-  #waiting-overlay .subtitle {
-    font-size: 14px;
-    font-weight: normal;
-    opacity: 0.7;
-    margin-top: 8px;
+  
+  #network-error {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 50, 50, 0.9);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: bold;
+    z-index: 70;
+    display: none;
+    text-align: center;
   }
-  #waiting-overlay .opponent-score {
-    font-size: 16px;
-    margin-top: 12px;
-    color: #ffd700;
-  }
+  #network-error.show { display: block; }
 </style>
 </head>
 <body>
@@ -247,16 +334,45 @@
       <div>Loading Bowling Simulator...</div>
     </div>
     <div id="error">
-      <div>⚠️ Error</div>
-      <div style="font-size: 14px; margin-top: 10px; color: #aaa;" id="error-detail"></div>
+      <div>⚠️ Failed to load 3D libraries</div>
+      <div style="font-size: 14px; margin-top: 10px; color: #aaa;">
+        Please check your internet connection. <br>
+        If opening via file://, some strict browsers block external scripts. <br>
+        Try using a simple local server (e.g., VS Code "Live Server" extension).
+      </div>
     </div>
     <div id="ui">
       <div id="scoreboard"></div>
       <div id="info">Frame 1 • Roll 1</div>
       <div id="power-meter"><div id="power-fill"></div></div>
       <div id="message"></div>
-      <button id="reset-btn">Reset</button>
-      <div id="instructions">Drag UP = Power<br>Drag LEFT/RIGHT = Aim</div>
+      <button id="reset-btn">Reset Game</button>
+      <button id="camera-settings-btn">📷 Camera</button>
+      <div id="camera-settings-panel">
+        <h3>📷 Camera Settings</h3>
+        <div class="setting-row">
+          <label>Height <span id="val-height">1.8</span>m</label>
+          <input type="range" id="cam-height" min="0.5" max="5" step="0.1" value="1.8">
+        </div>
+        <div class="setting-row">
+          <label>Back Offset <span id="val-back">-2.5</span>m</label>
+          <input type="range" id="cam-back" min="-8" max="2" step="0.1" value="-2.5">
+        </div>
+        <div class="setting-row">
+          <label>Tilt Angle <span id="val-tilt">-15</span>°</label>
+          <input type="range" id="cam-tilt" min="-30" max="45" step="1" value="-15">
+        </div>
+        <div class="setting-row">
+          <label>FOV <span id="val-fov">45</span>°</label>
+          <input type="range" id="cam-fov" min="20" max="90" step="1" value="45">
+        </div>
+        <div class="camera-mode-btns">
+          <button id="mode-aim" class="active">Aim View</button>
+          <button id="mode-roll">Roll View</button>
+          <button id="mode-lock">Lock Pins</button>
+        </div>
+      </div>
+      <div id="instructions">Drag UP to set power<br>Drag LEFT/RIGHT to aim</div>
     </div>
     <div id="game-over">
       <h1>Game Over</h1>
@@ -265,233 +381,169 @@
       <button id="play-again">Play Again</button>
     </div>
     
-    <!-- WAITING OVERLAY for opponent's turn -->
+    <!-- NETWORKING OVERLAYS -->
     <div id="waiting-overlay">
       <div class="spinner" style="margin-bottom: 16px;"></div>
       <div id="waiting-text">Waiting for opponent...</div>
-      <div class="subtitle">You'll be notified when it's your turn</div>
     </div>
+    <div id="network-error">Connection lost. Retrying...</div>
   </div>
 </div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-  }
-}
-</script>
-
 <script type="module">
-  // ==========================================
-  // TELEGRAM MINI APP INIT
-  // ==========================================
-  import * as THREE from 'three';
+  import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+  import * as CANNON from 'https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js';
 
-  // Wait for Telegram WebApp to be available
-  function waitForTelegram() {
-    return new Promise((resolve) => {
-      if (window.Telegram && window.Telegram.WebApp) {
-        resolve(window.Telegram.WebApp);
-      } else {
-        const check = () => {
-          if (window.Telegram && window.Telegram.WebApp) {
-            resolve(window.Telegram.WebApp);
-          } else {
-            setTimeout(check, 50);
-          }
-        };
-        check();
-      }
-    });
+  if (typeof THREE === 'undefined' || typeof CANNON === 'undefined') {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').classList.add('show');
+    throw new Error('Libraries failed to load');
   }
 
-  // ── Parse start_param ──
-  let gameId = null;
-  let playerId = null;
-  let tg = null;
-  let isMyTurn = false;    // Will be set based on whose turn it is
-  let gameActive = true;
+  // ==========================================
+  // NETWORKING LAYER
+  // ==========================================
+  class BackendAPI {
+    constructor(matchUuid, initData) {
+      this.matchUuid = matchUuid;
+      this.initData = initData;
+      this.isOnline = true;
+    }
 
-  async function initTelegram() {
-    tg = await waitForTelegram();
-    tg.ready();
-    tg.expand();
-
-    const initData = tg.initDataUnsafe || {};
-    const startParam = initData.start_param || '';
-    const user = initData.user || {};
-
-    console.log('Telegram WebApp initialized');
-    console.log('User:', user);
-    console.log('Start param:', startParam);
-
-    if (!startParam) {
-      // Fallback: try URL params
-      const urlParams = new URLSearchParams(window.location.search);
-      const sp = urlParams.get('start_param') || urlParams.get('tgWebAppStartParam') || '';
-      
-      if (!sp && user.id) {
-        // Dev mode: use URL match_uuid parameter
-        const matchUuid = urlParams.get('match_uuid');
-        if (matchUuid) {
-          gameId = matchUuid;
-          playerId = user.id;
-          console.log('Dev mode: using match_uuid param');
-          return;
-        }
-      }
-      
-      if (!sp) {
-        showError('No start_param found. Please open this app from Telegram.');
-        return;
-      }
-      
-      const parts = sp.split('_');
-      if (parts.length >= 2) {
-        gameId = parts[0];
-        playerId = parseInt(parts[1], 10);
-      }
-    } else {
-      // Format: gameId_playerId (e.g., "abc123_456789")
-      const parts = startParam.split('_');
-      if (parts.length >= 2) {
-        gameId = parts[0];
-        playerId = parseInt(parts[1], 10);
+    async _fetch(endpoint, options = {}) {
+      try {
+        const headers = {
+          'Content-Type': 'application/json',
+          'Telegram-Init-Data': this.initData, // ИСПРАВЛЕНО: правильный заголовок для FastAPI
+          ...options.headers
+        };
+        
+        const response = await fetch(endpoint, { ...options, headers });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        this.isOnline = true;
+        document.getElementById('network-error').classList.remove('show');
+        return await response.json();
+      } catch (error) {
+        this.isOnline = false;
+        document.getElementById('network-error').classList.add('show');
+        console.error('API Error:', error);
+        throw error;
       }
     }
 
-    if (!gameId || !playerId) {
-      showError(`Invalid start_param: "${startParam}"`);
+    async loadMatch() {
+      return this._fetch(`/match/${this.matchUuid}`); // ИСПРАВЛЕНО: использование matchUuid
+    }
+
+    async finishGame(data) {
+      return this._fetch('/finish', { 
+        method: 'POST', 
+        body: JSON.stringify(data) 
+      });
+    }
+    // ИСПРАВЛЕНО: метод sendHeartbeat удален, так как его нет на бэкенде
+  }
+
+  // ==========================================
+  // TELEGRAM & TOKEN INITIALIZATION
+  // ==========================================
+  const urlParams = new URLSearchParams(window.location.search);
+  const matchUuid = urlParams.get('match_uuid'); // ИСПРАВЛЕНО: получаем правильный параметр из URL
+  let api = null;
+  let pollInterval = null;
+  const gameStartTime = Date.now();
+
+  function initTelegramAndNetwork() {
+    if (window.Telegram && window.Telegram.WebApp) {
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      tg.expand();
+      
+      const initData = tg.initData;
+      
+      if (matchUuid) {
+        api = new BackendAPI(matchUuid, initData);
+        startNetworkLoops();
+        checkInitialTurn();
+      } else {
+        // Local fallback if no token is present
+        gameState.isMyTurn = true;
+      }
+    } else {
+      setTimeout(initTelegramAndNetwork, 100);
+    }
+  }
+
+  function startNetworkLoops() {
+    // Polling every 3 seconds
+    pollInterval = setInterval(async () => {
+      if (!api.isOnline) return; 
+      try {
+        const state = await api.loadMatch();
+        updateGameStateFromServer(state);
+      } catch (e) {
+        // Auto-retry handled by next interval, UI shows "Connection lost"
+      }
+    }, 3000);
+
+    // ИСПРАВЛЕНО: блок heartbeatInterval полностью удален
+  }
+
+  function updateGameStateFromServer(state) {
+    if (state.status === 'finished') {
+      showWinnerScreen(state);
+      gameState.isMyTurn = false;
       return;
     }
 
-    console.log(`Game: ${gameId}, Player: ${playerId}`);
+    const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
+    // ИСПРАВЛЕНО: используем current_turn_id, который должен отдавать бэкенд
+    const isMyTurnNow = state.current_turn_id?.toString() === myUserId;
 
-    // Detect if we're inside Telegram WebView or regular browser
-    isTelegramWebView = !!(tg && tg.initDataUnsafe && tg.initDataUnsafe.query_id);
-    
-    if (!isTelegramWebView) {
-      console.warn('⚠️ Not in Telegram WebView — running in demo/standalone mode');
-      showInfoBanner(
-        '🔓 Demo Mode — Data will NOT be sent to bot. Open from Telegram for real multiplayer!',
-        8000
-      );
-    } else {
-      console.log('✅ Inside Telegram WebView — multiplayer mode active');
+    if (isMyTurnNow && !gameState.isMyTurn) {
+      gameState.isMyTurn = true;
+      hideWaitingMessage();
+    } else if (!isMyTurnNow) {
+      gameState.isMyTurn = false;
+      showWaitingMessage("Waiting for opponent...");
     }
-
-    // Initially assume it's our turn (bot will manage this via refreshing the app)
-    isMyTurn = true;
   }
 
-  function showError(msg) {
-    document.getElementById('error-detail').textContent = msg;
-    document.getElementById('error').classList.add('show');
-    document.getElementById('loading').style.display = 'none';
-  }
-
-  // ── Telegram sendData helper with visual feedback ──
-  function sendFrameUpdate(frame, frameScore, totalScore, allFrames) {
-    if (!tg || !gameId || !playerId) {
-      console.warn('⚠️ Cannot send to bot: not inside Telegram WebView');
-      showInfoBanner('⚠️ Playing in demo mode — data NOT sent to bot. Open from Telegram for multiplayer!');
-      return 'demo';
-    }
-
-    const payload = {
-      action: 'frame_update',
-      game_id: gameId,
-      player_id: playerId,
-      frame: frame,
-      frame_score: frameScore,
-      total_score: totalScore,
-      all_frames: allFrames,
-    };
-
-    console.log('📤 Sending frame update:', JSON.stringify(payload));
-    
+  async function checkInitialTurn() {
     try {
-      tg.sendData(JSON.stringify(payload));
-      console.log('✅ Frame data sent successfully');
-      return true;
+      showWaitingMessage("Loading match...");
+      const state = await api.loadMatch();
+      updateGameStateFromServer(state);
     } catch (e) {
-      console.error('❌ Failed to send data:', e);
-      showInfoBanner('❌ Failed to send data to bot. Please try again.');
-      return false;
+      showWaitingMessage("Waiting for opponent...");
     }
   }
 
-  function sendGameEnd(totalScore, allFrames) {
-    if (!tg || !gameId || !playerId) {
-      console.warn('⚠️ Cannot send game_end: not inside Telegram WebView');
-      return 'demo';
-    }
-
-    const payload = {
-      action: 'game_end',
-      game_id: gameId,
-      player_id: playerId,
-      total_score: totalScore,
-      all_frames: allFrames,
-    };
-
-    console.log('📤 Sending game end:', JSON.stringify(payload));
-    
-    try {
-      tg.sendData(JSON.stringify(payload));
-      console.log('✅ Game end data sent successfully');
-      return true;
-    } catch (e) {
-      console.error('❌ Failed to send game_end data:', e);
-      showInfoBanner('❌ Failed to send game result. Please try again.');
-      return false;
-    }
-  }
-
-  // ── Info banner (temporary message at top) ──
-  let infoBannerTimer = null;
-
-  function showInfoBanner(text, duration = 5000) {
-    let banner = document.getElementById('info-banner');
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'info-banner';
-      banner.style.cssText = `
-        position: absolute; top: 80px; left: 8px; right: 8px;
-        background: rgba(200,50,50,0.9); color: #fff;
-        padding: 10px 14px; border-radius: 8px; font-size: 13px;
-        text-align: center; z-index: 70; font-weight: 600;
-        backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.2);
-        transition: opacity 0.3s;
-      `;
-      document.getElementById('ui').appendChild(banner);
-    }
-    banner.textContent = text;
-    banner.style.opacity = '1';
-    
-    if (infoBannerTimer) clearTimeout(infoBannerTimer);
-    infoBannerTimer = setTimeout(() => {
-      banner.style.opacity = '0';
-    }, duration);
-  }
-
-  // ── Waiting overlay functions ──
-  function showWaitingOverlay(message = 'Waiting for opponent...', subtitle = '') {
-    document.getElementById('waiting-text').textContent = message;
-    document.querySelector('#waiting-overlay .subtitle').textContent = subtitle || "You'll receive a notification when it's your turn";
+  function showWaitingMessage(text) {
+    document.getElementById('waiting-text').textContent = text;
     document.getElementById('waiting-overlay').classList.add('show');
-    isMyTurn = false;
   }
 
-  function hideWaitingOverlay() {
+  function hideWaitingMessage() {
     document.getElementById('waiting-overlay').classList.remove('show');
-    isMyTurn = true;
+  }
+
+  function showWinnerScreen(state) {
+    hideWaitingMessage();
+    gameState.phase = 'GAME_OVER';
+    document.getElementById('final-score').textContent = state.scores?.[9] || 0;
+    
+    const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id?.toString();
+    const isWinner = state.winner?.toString() === myUserId;
+    
+    document.getElementById('rating').textContent = isWinner ? '🏆 You Won!' : 'Opponent Won';
+    document.getElementById('game-over').classList.add('show');
+    gameState.isMyTurn = false;
   }
 
   // ==========================================
-  // 3D BOWLING SIMULATION (adapted from original)
+  // GAME CONSTANTS & SETUP
   // ==========================================
   const LANE_WIDTH = 1.0668;
   const FOUL_TO_HEAD_PIN = 18.288;
@@ -501,6 +553,7 @@
   const PIN_MASS = 0.75;
   const PIN_SPACING = 0.3048;
   const PIN_ROW_SPACING = PIN_SPACING * Math.sin(Math.PI / 3);
+  
   const PIN_CENTER_OFFSET_X = -0.01;
 
   const PIN_OFFSETS = [
@@ -515,18 +568,6 @@
     { x:  0.5 * PIN_SPACING, z: 3 * PIN_ROW_SPACING },
     { x:  1.5 * PIN_SPACING, z: 3 * PIN_ROW_SPACING }
   ];
-
-  // ── THREE.js setup ──
-  const isCannonAvailable = typeof CANNON !== 'undefined';
-  let world;
-  let useCannon;
-
-  // Check for cannon-es
-  const script = document.createElement('script');
-  script.src = 'https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js';
-  script.onload = () => { useCannon = true; initPhysics(); };
-  script.onerror = () => { useCannon = false; initPhysics(); };
-  document.head.appendChild(script);
 
   const container = document.getElementById('canvas-container');
   const canvas = document.getElementById('canvas');
@@ -555,7 +596,6 @@
   camera.position.copy(cameraPos);
   camera.lookAt(cameraLook);
 
-  // ── Lights ──
   const ambient = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambient);
 
@@ -576,309 +616,276 @@
   pinSpot.position.set(0, 5, FOUL_TO_HEAD_PIN + 0.5);
   scene.add(pinSpot);
 
-  // ── Physics (CANNON.js) ──
-  function initPhysics() {
-    if (!useCannon) {
-      console.warn('CANNON.js not available – running visual-only mode');
-      // Still need to set up basic scene
-    }
-  }
+  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+  world.broadphase = new CANNON.SAPBroadphase(world);
+  world.solver.iterations = 20;
+  world.solver.tolerance = 0.0001;
+  world.allowSleep = true;
 
-  // We'll rebuild physics when CANNON loads
-  let sceneReady = false;
+  const laneMat = new CANNON.Material('lane');
+  const ballMat = new CANNON.Material('ball');
+  const pinMat = new CANNON.Material('pin');
+  const gutterMat = new CANNON.Material('gutter');
+  const wallMat = new CANNON.Material('wall');
+  const backstopMat = new CANNON.Material('backstop');
 
-  function buildScene() {
-    if (!useCannon || typeof CANNON === 'undefined') {
-      // Wait for CANNON
-      setTimeout(buildScene, 100);
-      return;
-    }
+  world.addContactMaterial(new CANNON.ContactMaterial(laneMat, ballMat, { friction: 0.05, restitution: 0.05 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(gutterMat, ballMat, { friction: 0.02, restitution: 0.1 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(ballMat, pinMat, { friction: 0.20, restitution: 0.30 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(pinMat, pinMat, { friction: 0.25, restitution: 0.20 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(pinMat, laneMat, { friction: 0.3, restitution: 0.15 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(wallMat, ballMat, { friction: 0.1, restitution: 0.3 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(wallMat, pinMat, { friction: 0.3, restitution: 0.25 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(backstopMat, ballMat, { friction: 0.1, restitution: 0.3 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(backstopMat, pinMat, { friction: 0.4, restitution: 0.2 }));
 
-    world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-    world.broadphase = new CANNON.SAPBroadphase(world);
-    world.solver.iterations = 20;
-    world.solver.tolerance = 0.0001;
-    world.allowSleep = true;
-
-    const laneMat = new CANNON.Material('lane');
-    const ballMat = new CANNON.Material('ball');
-    const pinMat = new CANNON.Material('pin');
-    const gutterMat = new CANNON.Material('gutter');
-    const wallMat = new CANNON.Material('wall');
-    const backstopMat = new CANNON.Material('backstop');
-
-    world.addContactMaterial(new CANNON.ContactMaterial(laneMat, ballMat, { friction: 0.05, restitution: 0.05 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(gutterMat, ballMat, { friction: 0.02, restitution: 0.1 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(ballMat, pinMat, { friction: 0.20, restitution: 0.30 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(pinMat, pinMat, { friction: 0.25, restitution: 0.20 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(pinMat, laneMat, { friction: 0.3, restitution: 0.15 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(wallMat, ballMat, { friction: 0.1, restitution: 0.3 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(wallMat, pinMat, { friction: 0.3, restitution: 0.25 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(backstopMat, ballMat, { friction: 0.1, restitution: 0.3 }));
-    world.addContactMaterial(new CANNON.ContactMaterial(backstopMat, pinMat, { friction: 0.4, restitution: 0.2 }));
-
-    function addStaticBox(size, pos, mat, visualMat, receiveShadow = true) {
-      const body = new CANNON.Body({
-        mass: 0,
-        shape: new CANNON.Box(new CANNON.Vec3(size.x, size.y, size.z)),
-        position: new CANNON.Vec3(pos.x, pos.y, pos.z),
-        material: mat
-      });
-      world.addBody(body);
-      if (visualMat) {
-        const geom = new THREE.BoxGeometry(size.x * 2, size.y * 2, size.z * 2);
-        const mesh = new THREE.Mesh(geom, visualMat);
-        mesh.position.set(pos.x, pos.y, pos.z);
-        mesh.receiveShadow = receiveShadow;
-        mesh.castShadow = true;
-        scene.add(mesh);
-      }
-      return body;
-    }
-
-    const laneVisualMat = new THREE.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.3, metalness: 0.05 });
-    const approachVisualMat = new THREE.MeshStandardMaterial({ color: 0xb8956a, roughness: 0.4 });
-    const gutterVisualMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 });
-    const pinDeckVisualMat = new THREE.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.3, metalness: 0.05 });
-    const wallVisualMat = new THREE.MeshStandardMaterial({ color: 0x222230, roughness: 0.8 });
-    const foulLineMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.5 });
-    const backstopMat_vis = new THREE.MeshStandardMaterial({ color: 0x151520, roughness: 0.95 });
-    const arrowMat = new THREE.MeshStandardMaterial({ color: 0x7a3e10, roughness: 0.6 });
-
-    addStaticBox({ x: LANE_WIDTH / 2, y: 0.1, z: 2.25 }, { x: 0, y: -0.1, z: -2.25 }, laneMat, approachVisualMat);
-    addStaticBox({ x: LANE_WIDTH / 2, y: 0.1, z: 9.144 }, { x: 0, y: -0.1, z: 9.144 }, laneMat, laneVisualMat);
-    addStaticBox({ x: LANE_WIDTH / 2, y: 0.1, z: 5.0 }, { x: 0, y: -0.1, z: 21.0 }, laneMat, pinDeckVisualMat);
-    addStaticBox({ x: LANE_WIDTH / 2, y: 0.002, z: 0.03 }, { x: 0, y: 0.002, z: 0 }, laneMat, foulLineMat);
-
-    for (let i = -2; i <= 2; i++) {
-      const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.12, 3), arrowMat);
-      arrow.position.set(i * 0.15, 0.01, 4.5);
-      arrow.rotation.x = -Math.PI / 2;
-      arrow.rotation.z = Math.PI;
-      scene.add(arrow);
-    }
-
-    const GUTTER_WIDTH = 0.23;
-    const GUTTER_DEPTH = 0.10;
-    const GUTTER_LENGTH = 26;
-
-    addStaticBox({ x: GUTTER_WIDTH / 2, y: 0.05, z: GUTTER_LENGTH / 2 }, { x: -LANE_WIDTH / 2 - GUTTER_WIDTH / 2, y: -0.1 - GUTTER_DEPTH, z: 8 }, gutterMat, gutterVisualMat);
-    addStaticBox({ x: GUTTER_WIDTH / 2, y: 0.05, z: GUTTER_LENGTH / 2 }, { x: LANE_WIDTH / 2 + GUTTER_WIDTH / 2, y: -0.1 - GUTTER_DEPTH, z: 8 }, gutterMat, gutterVisualMat);
-    addStaticBox({ x: 0.05, y: 0.25, z: GUTTER_LENGTH / 2 }, { x: -LANE_WIDTH / 2 - GUTTER_WIDTH - 0.05, y: -0.05, z: 8 }, gutterMat, wallVisualMat);
-    addStaticBox({ x: 0.05, y: 0.25, z: GUTTER_LENGTH / 2 }, { x: LANE_WIDTH / 2 + GUTTER_WIDTH + 0.05, y: -0.05, z: 8 }, gutterMat, wallVisualMat);
-    addStaticBox({ x: 0.02, y: GUTTER_DEPTH / 2, z: GUTTER_LENGTH / 2 }, { x: -LANE_WIDTH / 2 - 0.01, y: -0.1 - GUTTER_DEPTH / 2, z: 8 }, gutterMat, null);
-    addStaticBox({ x: 0.02, y: GUTTER_DEPTH / 2, z: GUTTER_LENGTH / 2 }, { x: LANE_WIDTH / 2 + 0.01, y: -0.1 - GUTTER_DEPTH / 2, z: 8 }, gutterMat, null);
-    
-    addStaticBox({ x: LANE_WIDTH / 2 + GUTTER_WIDTH + 0.4, y: 1.0, z: 0.15 }, { x: 0, y: 0.9, z: 25 }, backstopMat, backstopMat_vis);
-    addStaticBox({ x: LANE_WIDTH / 2, y: 0.5, z: 0.08 }, { x: 0, y: 0.4, z: 24.7 }, backstopMat, new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.95 }));
-    addStaticBox({ x: 30, y: 0.1, z: 50 }, { x: 0, y: -3, z: 15 }, wallMat, null);
-
-    // ── Create pin meshes ──
-    function createPinMesh() {
-      const group = new THREE.Group();
-      const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.05 });
-      const redMat = new THREE.MeshStandardMaterial({ color: 0xcc0000, roughness: 0.3, metalness: 0.05 });
-      const offset = -PIN_HEIGHT / 2;
-
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.052, 0.04, 16), whiteMat);
-      base.position.y = 0.02 + offset; base.castShadow = true; base.receiveShadow = true; group.add(base);
-
-      const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.0605, 0.12, 16), whiteMat);
-      belly.position.y = 0.10 + offset; belly.castShadow = true; group.add(belly);
-
-      const taper = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.055, 0.10, 16), whiteMat);
-      taper.position.y = 0.21 + offset; taper.castShadow = true; group.add(taper);
-
-      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.035, 0.06, 16), whiteMat);
-      neck.position.y = 0.29 + offset; neck.castShadow = true; group.add(neck);
-
-      const stripe1 = new THREE.Mesh(new THREE.CylinderGeometry(0.0325, 0.0325, 0.008, 16), redMat);
-      stripe1.position.y = 0.27 + offset; group.add(stripe1);
-      const stripe2 = new THREE.Mesh(new THREE.CylinderGeometry(0.0325, 0.0325, 0.008, 16), redMat);
-      stripe2.position.y = 0.31 + offset; group.add(stripe2);
-
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 16), whiteMat);
-      head.position.y = 0.35 + offset; head.castShadow = true; group.add(head);
-
-      return group;
-    }
-
-    function createPinBody(x, y, z) {
-      const shape = new CANNON.Cylinder(0.04, 0.06, PIN_HEIGHT, 10);
-      const body = new CANNON.Body({
-        mass: PIN_MASS,
-        shape: shape,
-        position: new CANNON.Vec3(x, PIN_HEIGHT / 2, z),
-        material: pinMat,
-        linearDamping: 0.05,
-        angularDamping: 0.15
-      });
-      body.originalPosition = new CANNON.Vec3(x, PIN_HEIGHT / 2, z);
-      return body;
-    }
-
-    function createBallMesh() {
-      const group = new THREE.Group();
-      const bMat = new THREE.MeshStandardMaterial({ color: 0x9933ff, roughness: 0.1, metalness: 0.3, emissive: 0x220044, emissiveIntensity: 0.3 });
-      const ball = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 32, 32), bMat);
-      ball.castShadow = false;
-      group.add(ball);
-
-      const holeMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.95, metalness: 0.1 });
-      const holeGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.025, 16);
-      
-      function addHole(x, y, z) {
-        const h = new THREE.Mesh(holeGeo, holeMat);
-        const dir = new THREE.Vector3(x, y, z).normalize();
-        h.position.copy(dir.clone().multiplyScalar(BALL_RADIUS - 0.012));
-        h.lookAt(new THREE.Vector3(0, 0, 0));
-        group.add(h);
-      }
-      addHole(0.035, 0.04, 0.95);
-      addHole(-0.035, 0.04, 0.95);
-      addHole(0, -0.045, 0.95);
-
-      return group;
-    }
-
-    window.ballMesh = createBallMesh();
-    scene.add(window.ballMesh);
-
-    window.ballBody = new CANNON.Body({
-      mass: BALL_MASS, 
-      shape: new CANNON.Sphere(BALL_RADIUS),
-      position: new CANNON.Vec3(0, BALL_RADIUS + 0.01, -0.3),
-      material: ballMat, 
-      linearDamping: 0.01,
-      angularDamping: 0.02
+  function addStaticBox(size, pos, mat, visualMat, receiveShadow = true) {
+    const body = new CANNON.Body({
+      mass: 0,
+      shape: new CANNON.Box(new CANNON.Vec3(size.x, size.y, size.z)),
+      position: new CANNON.Vec3(pos.x, pos.y, pos.z),
+      material: mat
     });
-    world.addBody(window.ballBody);
-
-    const aimLine = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 15)]),
-      new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.6 })
-    );
-    aimLine.visible = false;
-    scene.add(aimLine);
-    window.aimLine = aimLine;
-
-    // ── Pin array ──
-    window.pins = [];
-
-    function resetPins() {
-      for (const pin of window.pins) { world.removeBody(pin.body); scene.remove(pin.mesh); }
-      window.pins = [];
-      const headPinZ = FOUL_TO_HEAD_PIN;
-      for (const off of PIN_OFFSETS) {
-        const mesh = createPinMesh();
-        const body = createPinBody(off.x + PIN_CENTER_OFFSET_X, 0, headPinZ + off.z);
-        world.addBody(body);
-        scene.add(mesh);
-        window.pins.push({ mesh, body });
-      }
+    world.addBody(body);
+    if (visualMat) {
+      const geom = new THREE.BoxGeometry(size.x * 2, size.y * 2, size.z * 2);
+      const mesh = new THREE.Mesh(geom, visualMat);
+      mesh.position.set(pos.x, pos.y, pos.z);
+      mesh.receiveShadow = receiveShadow;
+      mesh.castShadow = true;
+      scene.add(mesh);
     }
-
-    function resetBall() {
-      if (!window.ballBody) return;
-      world.removeBody(window.ballBody);
-      window.ballBody.position.set(0, BALL_RADIUS + 0.01, -0.3);
-      window.ballBody.velocity.setZero();
-      window.ballBody.angularVelocity.setZero();
-      window.ballBody.quaternion.set(0, 0, 0, 1);
-      window.ballBody.linearDamping = 0.01;
-      window.ballBody.angularDamping = 0.02;
-      window.ballBody.mass = BALL_MASS;
-      window.ballBody.updateMassProperties();
-      window.ballBody.type = CANNON.Body.DYNAMIC;
-      world.addBody(window.ballBody);
-      window.ballBody.wakeUp();
-      
-      if (window.ballMesh) {
-        window.ballMesh.visible = true;
-        window.ballMesh.position.set(0, BALL_RADIUS + 0.01, -0.3);
-        window.ballMesh.quaternion.set(0, 0, 0, 1);
-      }
-    }
-
-    window.resetPins = resetPins;
-    window.resetBall = resetBall;
-
-    // ── Callbacks for game logic ──
-    window.isPinStanding = function(pin) {
-      const localUp = new CANNON.Vec3(0, 1, 0);
-      const worldUp = new CANNON.Vec3();
-      pin.body.quaternion.vmult(localUp, worldUp);
-      const origPos = pin.body.originalPosition;
-      const dist = Math.sqrt(
-        Math.pow(pin.body.position.x - origPos.x, 2) + 
-        Math.pow(pin.body.position.z - origPos.z, 2)
-      );
-      return worldUp.y > 0.7 && pin.body.position.y > 0.05 && dist < 0.15;
-    };
-
-    window.countStandingPins = function() {
-      let n = 0;
-      for (const pin of window.pins) if (window.isPinStanding(pin)) n++;
-      return n;
-    };
-
-    window.removeFallenPins = function() {
-      for (let i = window.pins.length - 1; i >= 0; i--) {
-        if (!window.isPinStanding(window.pins[i])) {
-          world.removeBody(window.pins[i].body);
-          scene.remove(window.pins[i].mesh);
-          window.pins.splice(i, 1);
-        }
-      }
-    };
-
-    resetPins();
-    resetBall();
-    sceneReady = true;
-    document.getElementById('loading').style.display = 'none';
+    return body;
   }
 
-  // ==========================================
-  // GAME LOGIC (Bowling)
-  // ==========================================
+  const laneVisualMat = new THREE.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.3, metalness: 0.05 });
+  const approachVisualMat = new THREE.MeshStandardMaterial({ color: 0xb8956a, roughness: 0.4 });
+  const gutterVisualMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 });
+  const pinDeckVisualMat = new THREE.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.3, metalness: 0.05 });
+  const wallVisualMat = new THREE.MeshStandardMaterial({ color: 0x222230, roughness: 0.8 });
+  const foulLineMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.5 });
+  const backstopMat_vis = new THREE.MeshStandardMaterial({ color: 0x151520, roughness: 0.95 });
+  const arrowMat = new THREE.MeshStandardMaterial({ color: 0x7a3e10, roughness: 0.6 });
+
+  addStaticBox({ x: LANE_WIDTH / 2, y: 0.1, z: 2.25 }, { x: 0, y: -0.1, z: -2.25 }, laneMat, approachVisualMat);
+  addStaticBox({ x: LANE_WIDTH / 2, y: 0.1, z: 9.144 }, { x: 0, y: -0.1, z: 9.144 }, laneMat, laneVisualMat);
+  addStaticBox({ x: LANE_WIDTH / 2, y: 0.1, z: 5.0 }, { x: 0, y: -0.1, z: 21.0 }, laneMat, pinDeckVisualMat);
+  addStaticBox({ x: LANE_WIDTH / 2, y: 0.002, z: 0.03 }, { x: 0, y: 0.002, z: 0 }, laneMat, foulLineMat);
+
+  for (let i = -2; i <= 2; i++) {
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.12, 3), arrowMat);
+    arrow.position.set(i * 0.15, 0.01, 4.5);
+    arrow.rotation.x = -Math.PI / 2;
+    arrow.rotation.z = Math.PI;
+    scene.add(arrow);
+  }
+
+  const GUTTER_WIDTH = 0.23;
+  const GUTTER_DEPTH = 0.10;
+  const GUTTER_LENGTH = 26;
+
+  addStaticBox({ x: GUTTER_WIDTH / 2, y: 0.05, z: GUTTER_LENGTH / 2 }, { x: -LANE_WIDTH / 2 - GUTTER_WIDTH / 2, y: -0.1 - GUTTER_DEPTH, z: 8 }, gutterMat, gutterVisualMat);
+  addStaticBox({ x: GUTTER_WIDTH / 2, y: 0.05, z: GUTTER_LENGTH / 2 }, { x: LANE_WIDTH / 2 + GUTTER_WIDTH / 2, y: -0.1 - GUTTER_DEPTH, z: 8 }, gutterMat, gutterVisualMat);
+  addStaticBox({ x: 0.05, y: 0.25, z: GUTTER_LENGTH / 2 }, { x: -LANE_WIDTH / 2 - GUTTER_WIDTH - 0.05, y: -0.05, z: 8 }, gutterMat, wallVisualMat);
+  addStaticBox({ x: 0.05, y: 0.25, z: GUTTER_LENGTH / 2 }, { x: LANE_WIDTH / 2 + GUTTER_WIDTH + 0.05, y: -0.05, z: 8 }, gutterMat, wallVisualMat);
+  addStaticBox({ x: 0.02, y: GUTTER_DEPTH / 2, z: GUTTER_LENGTH / 2 }, { x: -LANE_WIDTH / 2 - 0.01, y: -0.1 - GUTTER_DEPTH / 2, z: 8 }, gutterMat, null);
+  addStaticBox({ x: 0.02, y: GUTTER_DEPTH / 2, z: GUTTER_LENGTH / 2 }, { x: LANE_WIDTH / 2 + 0.01, y: -0.1 - GUTTER_DEPTH / 2, z: 8 }, gutterMat, null);
+  
+  addStaticBox({ x: LANE_WIDTH / 2 + GUTTER_WIDTH + 0.4, y: 1.0, z: 0.15 }, { x: 0, y: 0.9, z: 25 }, backstopMat, backstopMat_vis);
+  addStaticBox({ x: LANE_WIDTH / 2, y: 0.5, z: 0.08 }, { x: 0, y: 0.4, z: 24.7 }, backstopMat, new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.95 }));
+  addStaticBox({ x: 30, y: 0.1, z: 50 }, { x: 0, y: -3, z: 15 }, wallMat, null);
+
+  function createPinMesh() {
+    const group = new THREE.Group();
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.05 });
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xcc0000, roughness: 0.3, metalness: 0.05 });
+    const offset = -PIN_HEIGHT / 2;
+
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.052, 0.04, 16), whiteMat);
+    base.position.y = 0.02 + offset; base.castShadow = true; base.receiveShadow = true; group.add(base);
+
+    const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.0605, 0.12, 16), whiteMat);
+    belly.position.y = 0.10 + offset; belly.castShadow = true; group.add(belly);
+
+    const taper = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.055, 0.10, 16), whiteMat);
+    taper.position.y = 0.21 + offset; taper.castShadow = true; group.add(taper);
+
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.035, 0.06, 16), whiteMat);
+    neck.position.y = 0.29 + offset; neck.castShadow = true; group.add(neck);
+
+    const stripe1 = new THREE.Mesh(new THREE.CylinderGeometry(0.0325, 0.0325, 0.008, 16), redMat);
+    stripe1.position.y = 0.27 + offset; group.add(stripe1);
+    const stripe2 = new THREE.Mesh(new THREE.CylinderGeometry(0.0325, 0.0325, 0.008, 16), redMat);
+    stripe2.position.y = 0.31 + offset; group.add(stripe2);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 16), whiteMat);
+    head.position.y = 0.35 + offset; head.castShadow = true; group.add(head);
+
+    return group;
+  }
+
+  function createPinBody(x, y, z) {
+    const shape = new CANNON.Cylinder(0.04, 0.06, PIN_HEIGHT, 10);
+    const body = new CANNON.Body({
+      mass: PIN_MASS,
+      shape: shape,
+      position: new CANNON.Vec3(x, PIN_HEIGHT / 2, z),
+      material: pinMat,
+      linearDamping: 0.05,
+      angularDamping: 0.15
+    });
+    body.originalPosition = new CANNON.Vec3(x, PIN_HEIGHT / 2, z);
+    return body;
+  }
+
+  function createBallMesh() {
+    const group = new THREE.Group();
+    const bMat = new THREE.MeshStandardMaterial({ color: 0x9933ff, roughness: 0.1, metalness: 0.3, emissive: 0x220044, emissiveIntensity: 0.3 });
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 32, 32), bMat);
+    ball.castShadow = false;
+    group.add(ball);
+
+    const holeMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.95, metalness: 0.1 });
+    const holeGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.025, 16);
+    
+    function addHole(x, y, z) {
+      const h = new THREE.Mesh(holeGeo, holeMat);
+      const dir = new THREE.Vector3(x, y, z).normalize();
+      h.position.copy(dir.clone().multiplyScalar(BALL_RADIUS - 0.012));
+      h.lookAt(new THREE.Vector3(0, 0, 0));
+      group.add(h);
+    }
+    addHole(0.035, 0.04, 0.95);
+    addHole(-0.035, 0.04, 0.95);
+    addHole(0, -0.045, 0.95);
+
+    return group;
+  }
+
+  const ballMesh = createBallMesh();
+  scene.add(ballMesh);
+
+  const ballBody = new CANNON.Body({
+    mass: BALL_MASS, 
+    shape: new CANNON.Sphere(BALL_RADIUS),
+    position: new CANNON.Vec3(0, BALL_RADIUS + 0.01, -0.3),
+    material: ballMat, 
+    linearDamping: 0.01,
+    angularDamping: 0.02
+  });
+  world.addBody(ballBody);
+
+  const aimLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 15)]),
+    new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.6 })
+  );
+  aimLine.visible = false;
+  scene.add(aimLine);
+
+  let pins = [];
   const rolls = [];
   const gameState = {
     frames: Array(10).fill(null).map(() => ({ rolls: [] })),
-    currentFrame: 0,
-    currentRollInFrame: 0,
-    pinsStandingBeforeRoll: 10,
-    phase: 'AIMING',      // AIMING, ROLLING, SETTLING, GAME_OVER
-    needsPinReset: true,
-    settleTimer: 0,
-    rollTimer: 0,
-    gameOver: false,
-    hasSubmitted: false,   // Track if we've submitted this frame
+    currentFrame: 0, currentRollInFrame: 0, pinsStandingBeforeRoll: 10,
+    phase: 'AIMING', needsPinReset: true, settleTimer: 0, rollTimer: 0,
+    isMyTurn: true
   };
+
+  function resetPins() {
+    for (const pin of pins) { world.removeBody(pin.body); scene.remove(pin.mesh); }
+    pins = [];
+    const headPinZ = FOUL_TO_HEAD_PIN;
+    for (const offset of PIN_OFFSETS) {
+      const mesh = createPinMesh();
+      const body = createPinBody(offset.x + PIN_CENTER_OFFSET_X, 0, headPinZ + offset.z);
+      world.addBody(body); scene.add(mesh);
+      pins.push({ mesh, body });
+    }
+  }
+
+  function resetBall() {
+    world.removeBody(ballBody);
+    ballBody.position.set(0, BALL_RADIUS + 0.01, -0.3);
+    ballBody.velocity.setZero(); 
+    ballBody.angularVelocity.setZero();
+    ballBody.quaternion.set(0, 0, 0, 1);
+    ballBody.linearDamping = 0.01;
+    ballBody.angularDamping = 0.02;
+    ballBody.mass = BALL_MASS;
+    ballBody.updateMassProperties();
+    ballBody.type = CANNON.Body.DYNAMIC;
+    world.addBody(ballBody);
+    ballBody.wakeUp();
+    
+    ballMesh.visible = true;
+    ballMesh.position.set(0, BALL_RADIUS + 0.01, -0.3);
+    ballMesh.quaternion.set(0, 0, 0, 1);
+  }
+
+  function isPinStanding(pin) {
+    const localUp = new CANNON.Vec3(0, 1, 0);
+    const worldUp = new CANNON.Vec3();
+    pin.body.quaternion.vmult(localUp, worldUp);
+    const origPos = pin.body.originalPosition;
+    const dist = Math.sqrt(Math.pow(pin.body.position.x - origPos.x, 2) + Math.pow(pin.body.position.z - origPos.z, 2));
+    return worldUp.y > 0.7 && pin.body.position.y > 0.05 && dist < 0.15;
+  }
+
+  function countStandingPins() {
+    let n = 0;
+    for (const pin of pins) if (isPinStanding(pin)) n++;
+    return n;
+  }
+
+  function removeFallenPins() {
+    for (let i = pins.length - 1; i >= 0; i--) {
+      if (!isPinStanding(pins[i])) {
+        world.removeBody(pins[i].body);
+        scene.remove(pins[i].mesh);
+        pins.splice(i, 1);
+      }
+    }
+  }
 
   function calculateScores() {
     const scores = [];
     let rollIndex = 0;
     let cumulativeScore = 0;
 
+    function getRoll(index) {
+      return rolls[index] !== undefined ? rolls[index] : null;
+    }
+
     for (let frame = 0; frame < 10; frame++) {
       if (frame < 9) {
-        const first = rolls[rollIndex];
-        if (first === undefined) { scores.push(null); continue; }
+        const first = getRoll(rollIndex);
+        if (first === null) {
+          scores.push(null);
+          continue;
+        }
 
         if (first === 10) {
-          const bonus1 = rolls[rollIndex + 1];
-          const bonus2 = rolls[rollIndex + 2];
-          if (bonus1 === undefined || bonus2 === undefined) { scores.push(null); continue; }
+          const bonus1 = getRoll(rollIndex + 1);
+          const bonus2 = getRoll(rollIndex + 2);
+          if (bonus1 === null || bonus2 === null) {
+            scores.push(null);
+            continue;
+          }
           cumulativeScore += 10 + bonus1 + bonus2;
           scores.push(cumulativeScore);
           rollIndex += 1;
         } else {
-          const second = rolls[rollIndex + 1];
-          if (second === undefined) { scores.push(null); continue; }
-
+          const second = getRoll(rollIndex + 1);
+          if (second === null) {
+            scores.push(null);
+            continue;
+          }
           if (first + second === 10) {
-            const bonus = rolls[rollIndex + 2];
-            if (bonus === undefined) { scores.push(null); continue; }
+            const bonus = getRoll(rollIndex + 2);
+            if (bonus === null) {
+              scores.push(null);
+              continue;
+            }
             cumulativeScore += 10 + bonus;
           } else {
             cumulativeScore += first + second;
@@ -887,22 +894,32 @@
           rollIndex += 2;
         }
       } else {
-        // Frame 10
-        const first = rolls[rollIndex];
-        if (first === undefined) { scores.push(null); continue; }
-
+        const first = getRoll(rollIndex);
+        if (first === null) {
+          scores.push(null);
+          continue;
+        }
         let frameScore = 0;
         if (first === 10) {
-          const second = rolls[rollIndex + 1];
-          const third = rolls[rollIndex + 2];
-          if (second === undefined || third === undefined) { scores.push(null); continue; }
+          const second = getRoll(rollIndex + 1);
+          const third = getRoll(rollIndex + 2);
+          if (second === null || third === null) {
+            scores.push(null);
+            continue;
+          }
           frameScore = 10 + second + third;
         } else {
-          const second = rolls[rollIndex + 1];
-          if (second === undefined) { scores.push(null); continue; }
+          const second = getRoll(rollIndex + 1);
+          if (second === null) {
+            scores.push(null);
+            continue;
+          }
           if (first + second === 10) {
-            const bonus = rolls[rollIndex + 2];
-            if (bonus === undefined) { scores.push(null); continue; }
+            const bonus = getRoll(rollIndex + 2);
+            if (bonus === null) {
+              scores.push(null);
+              continue;
+            }
             frameScore = 10 + bonus;
           } else {
             frameScore = first + second;
@@ -949,15 +966,12 @@
   }
 
   function updateInfo() {
-    document.getElementById('info').textContent = 
-      gameState.phase === 'GAME_OVER' ? 'Game Over' : 
-      `Frame ${gameState.currentFrame + 1} • Roll ${gameState.currentRollInFrame + 1}`;
+    document.getElementById('info').textContent = gameState.phase === 'GAME_OVER' ? 'Game Over' : `Frame ${gameState.currentFrame + 1} • Roll ${gameState.currentRollInFrame + 1}`;
   }
 
   function showMessage(text) {
     const msg = document.getElementById('message');
-    msg.textContent = text;
-    msg.classList.add('show');
+    msg.textContent = text; msg.classList.add('show');
     setTimeout(() => msg.classList.remove('show'), 2000);
   }
 
@@ -965,102 +979,61 @@
     const scores = calculateScores();
     const finalScore = scores[9] || 0;
     document.getElementById('final-score').textContent = finalScore;
-    let rating = finalScore === 300 ? '🏆 PERFECT GAME!' : 
-                 finalScore >= 250 ? '🌟 Outstanding!' : 
-                 finalScore >= 200 ? '👏 Great Game!' : 
-                 finalScore >= 150 ? '👍 Good Game' : 
-                 finalScore >= 100 ? 'Nice Try!' : 'Keep Practicing!';
+    let rating = finalScore === 300 ? '🏆 PERFECT GAME!' : finalScore >= 250 ? '🌟 Outstanding!' : finalScore >= 200 ? '👏 Great Game!' : finalScore >= 150 ? '👍 Good Game' : finalScore >= 100 ? 'Nice Try!' : 'Keep Practicing!';
     document.getElementById('rating').textContent = rating;
     document.getElementById('game-over').classList.add('show');
   }
 
-  function sendFrameToBot() {
-    const scores = calculateScores();
-    const currentScore = scores[gameState.currentFrame - 1] || 0;
-    const frameIndex = gameState.currentFrame - 1;
-    
-    if (frameIndex < 0) return;
-
-    // Build all frames data for persistence
-    const allFrames = [];
-    for (let i = 0; i < 10; i++) {
-      const frameRolls = gameState.frames[i].rolls || [];
-      const score = i <= frameIndex ? (scores[i] || 0) : null;
-      allFrames.push({
-        frame: i + 1,
-        rolls: [...frameRolls],
-        score: score,
-      });
-    }
-
-    const frameScore = gameState.frames[frameIndex].rolls.reduce((a, b) => a + b, 0);
-
-    const sent = sendFrameUpdate(frameIndex + 1, frameScore, currentScore, allFrames);
-    if (sent) {
-      gameState.hasSubmitted = true;
-    }
-    return sent;
-  }
-
-  function sendFinalToBot() {
-    const scores = calculateScores();
-    const finalScore = scores[9] || 0;
-
-    const allFrames = [];
-    for (let i = 0; i < 10; i++) {
-      const frameRolls = gameState.frames[i].rolls || [];
-      allFrames.push({
-        frame: i + 1,
-        rolls: [...frameRolls],
-        score: scores[i] || 0,
-      });
-    }
-
-    const sent = sendGameEnd(finalScore, allFrames);
-    if (sent) {
-      gameState.hasSubmitted = true;
-    }
-    return sent;
-  }
-
-  function finishGame() {
+  // --- NETWORKING ADDITION: Modified finishGame ---
+  async function finishGame() {
     gameState.phase = 'GAME_OVER';
-    gameState.gameOver = true;
-    if (window.removeFallenPins) window.removeFallenPins();
-    if (window.resetBall) window.resetBall();
+    removeFallenPins();
+    resetBall();
     updateScoreboard();
     updateInfo();
-
-    const scores = calculateScores();
-    const finalScore = scores[9] || 0;
-
-    // Send game_end payload
-    const sent = sendFinalToBot();
-    if (sent === true) {
-      showWaitingOverlay('✅ Game submitted!', 'Waiting for opponent to finish their game...');
+    
+    if (api && matchUuid) { // ИСПРАВЛЕНО: использование matchUuid
+      showWaitingMessage("Submitting score...");
+      try {
+        const scores = calculateScores();
+        const finalScore = scores[9] || 0;
+        const myUserId = window.Telegram.WebApp.initDataUnsafe?.user?.id; // ИСПРАВЛЕНО: получаем ID для отправки
+        
+        await api.finishGame({
+          telegram_id: myUserId,       // ИСПРАВЛЕНО: добавлено обязательное поле
+          match_uuid: matchUuid,       // ИСПРАВЛЕНО: добавлено обязательное поле
+          score: finalScore,
+          frames: gameState.frames
+        });
+        
+        hideWaitingMessage();
+        document.getElementById('final-score').textContent = finalScore;
+        document.getElementById('rating').textContent = "Your score has been submitted.";
+        document.getElementById('game-over').classList.add('show');
+        gameState.isMyTurn = false;
+      } catch (e) {
+        hideWaitingMessage();
+        document.getElementById('final-score').textContent = "Error";
+        document.getElementById('rating').textContent = "Submission pending (offline).";
+        document.getElementById('game-over').classList.add('show');
+        gameState.isMyTurn = false;
+      }
     } else {
       showGameOver();
     }
   }
 
   function onRollComplete() {
-    if (!sceneReady || !useCannon || !window.countStandingPins || !window.removeFallenPins) {
-      return;
-    }
-
-    const standingNow = window.countStandingPins();
+    const standingNow = countStandingPins();
     const pinsKnocked = Math.max(0, gameState.pinsStandingBeforeRoll - standingNow);
 
     rolls.push(pinsKnocked);
     gameState.frames[gameState.currentFrame].rolls.push(pinsKnocked);
 
-    let frameCompleted = false;
-
     if (gameState.currentFrame < 9) {
       if (gameState.currentRollInFrame === 0) {
         if (pinsKnocked === 10) {
           showMessage('STRIKE!');
-          frameCompleted = true;
           gameState.currentFrame++;
           gameState.currentRollInFrame = 0;
           gameState.pinsStandingBeforeRoll = 10;
@@ -1072,20 +1045,18 @@
         }
       } else {
         if (standingNow === 0) showMessage('SPARE!');
-        frameCompleted = true;
         gameState.currentFrame++;
         gameState.currentRollInFrame = 0;
         gameState.pinsStandingBeforeRoll = 10;
         gameState.needsPinReset = true;
       }
     } else {
-      // Frame 10
       const frameRolls = gameState.frames[9].rolls;
 
       if (gameState.currentRollInFrame === 0) {
         if (pinsKnocked === 10) {
           showMessage('STRIKE!');
-          window.resetPins();
+          resetPins();
           gameState.pinsStandingBeforeRoll = 10;
           gameState.currentRollInFrame = 1;
         } else {
@@ -1097,7 +1068,7 @@
         if (firstRoll === 10) {
           if (pinsKnocked === 10) {
             showMessage('STRIKE!');
-            window.resetPins();
+            resetPins();
             gameState.pinsStandingBeforeRoll = 10;
           } else {
             gameState.pinsStandingBeforeRoll = standingNow;
@@ -1105,7 +1076,7 @@
           gameState.currentRollInFrame = 2;
         } else if (firstRoll + pinsKnocked === 10) {
           showMessage('SPARE!');
-          window.resetPins();
+          resetPins();
           gameState.pinsStandingBeforeRoll = 10;
           gameState.currentRollInFrame = 2;
         } else {
@@ -1113,47 +1084,28 @@
           return;
         }
       } else if (gameState.currentRollInFrame === 2) {
-        if (pinsKnocked === 10) showMessage('STRIKE!');
+        if (pinsKnocked === 10) {
+          showMessage('STRIKE!');
+        }
         finishGame();
         return;
       }
     }
 
-    window.removeFallenPins();
+    removeFallenPins();
     if (gameState.needsPinReset) {
-      window.resetPins();
+      resetPins();
       gameState.pinsStandingBeforeRoll = 10;
     } else {
       gameState.pinsStandingBeforeRoll = standingNow;
     }
 
-    window.resetBall();
+    resetBall();
     gameState.phase = 'AIMING';
     updateScoreboard();
     updateInfo();
-
-    // Send frame update to bot
-    if (frameCompleted && gameState.currentFrame <= 10) {
-      const sent = sendFrameToBot();
-      if (sent === true) {
-        // Data successfully sent inside Telegram WebView
-        const scores = calculateScores();
-        const completedScore = scores[gameState.currentFrame - 1] || 0;
-        showWaitingOverlay(
-          `✅ Frame ${gameState.currentFrame} submitted!`,
-          `Score: ${completedScore} — You'll be notified when it's your turn again`
-        );
-      } else if (sent === 'demo') {
-        // Demo mode — just continue playing locally
-        console.log('Demo mode: frame completed locally (not sent to bot)');
-      } else {
-        // sendData failed — show warning
-        showInfoBanner('❌ Failed to send data to bot. Please try again.');
-      }
-    }
   }
 
-  // ── Input handling ──
   let touchStart = null, currentTouch = null, aimAngle = 0, throwPower = 0;
 
   function getCanvasCoords(e) {
@@ -1163,7 +1115,8 @@
   }
 
   function onPointerDown(e) {
-    if (gameState.phase !== 'AIMING' || !isMyTurn || gameState.gameOver) return;
+    if (gameState.phase !== 'AIMING' || !gameState.isMyTurn) return;
+    
     e.preventDefault();
     const c = getCanvasCoords(e);
     touchStart = { x: c.x, y: c.y };
@@ -1172,7 +1125,7 @@
   }
 
   function onPointerMove(e) {
-    if (!touchStart || !isMyTurn || gameState.gameOver) return;
+    if (!touchStart || !gameState.isMyTurn) return;
     e.preventDefault();
     const c = getCanvasCoords(e);
     currentTouch = { x: c.x, y: c.y };
@@ -1181,38 +1134,31 @@
     aimAngle = Math.max(-0.4, Math.min(0.4, -dx * 0.003));
     throwPower = Math.max(0, Math.min(1, -dy / 250));
     document.getElementById('power-fill').style.height = (throwPower * 100) + '%';
-    if (window.aimLine) {
-      window.aimLine.visible = true;
-      const bx = window.ballBody ? window.ballBody.position.x : 0;
-      const bz = window.ballBody ? window.ballBody.position.z : -0.3;
-      window.aimLine.position.set(bx, 0.02, bz);
-      window.aimLine.rotation.y = aimAngle;
-    }
+    aimLine.visible = true;
+    aimLine.position.set(ballBody.position.x, 0.02, ballBody.position.z);
+    aimLine.rotation.y = aimAngle;
   }
 
   function onPointerUp(e) {
-    if (!touchStart || !isMyTurn || gameState.gameOver) return;
+    if (!touchStart || !gameState.isMyTurn) return;
     e.preventDefault();
     document.getElementById('power-meter').classList.remove('active');
-    if (window.aimLine) window.aimLine.visible = false;
-    if (throwPower > 0.05 && window.ballBody) throwBall();
+    aimLine.visible = false;
+    if (throwPower > 0.05) throwBall();
     touchStart = null; currentTouch = null; aimAngle = 0; throwPower = 0;
     document.getElementById('power-fill').style.height = '0%';
   }
 
   function throwBall() {
-    if (!window.ballBody) return;
     const velocity = 5 + throwPower * 15;
     const impulseMag = BALL_MASS * velocity;
     const dirX = Math.sin(aimAngle), dirZ = Math.cos(aimAngle);
     
-    window.ballBody.applyImpulse(
-      new CANNON.Vec3(dirX * impulseMag, 0, dirZ * impulseMag),
-      window.ballBody.position
-    );
+    ballBody.applyImpulse(new CANNON.Vec3(dirX * impulseMag, 0, dirZ * impulseMag), ballBody.position);
     const omega = 10 + throwPower * 20;
-    window.ballBody.angularVelocity.set(-dirZ * omega, 0, dirX * omega);
-    window.ballBody.wakeUp();
+    ballBody.angularVelocity.set(-dirZ * omega, 0, dirX * omega);
+    
+    ballBody.wakeUp();
     gameState.phase = 'ROLLING';
     gameState.settleTimer = 0;
     gameState.rollTimer = 0;
@@ -1227,23 +1173,82 @@
   canvas.addEventListener('mouseup', onPointerUp);
   canvas.addEventListener('mouseleave', onPointerUp);
   document.addEventListener('touchmove', (e) => { if (e.target === canvas) e.preventDefault(); }, { passive: false });
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
 
-  // ── Game loop ──
+  const camSettings = {
+    height: 1.8,
+    backOffset: -2.5,
+    tiltAngle: -15,
+    fov: 45,
+    mode: 'aim'
+  };
+
+  const settingsPanel = document.getElementById('camera-settings-panel');
+  const settingsBtn = document.getElementById('camera-settings-btn');
+  
+  settingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('show');
+  });
+
+  const sliderHeight = document.getElementById('cam-height');
+  const sliderBack = document.getElementById('cam-back');
+  const sliderTilt = document.getElementById('cam-tilt');
+  const sliderFov = document.getElementById('cam-fov');
+  
+  const valHeight = document.getElementById('val-height');
+  const valBack = document.getElementById('val-back');
+  const valTilt = document.getElementById('val-tilt');
+  const valFov = document.getElementById('val-fov');
+
+  function updateCameraFromSettings() {
+    camSettings.height = parseFloat(sliderHeight.value);
+    camSettings.backOffset = parseFloat(sliderBack.value);
+    camSettings.tiltAngle = parseFloat(sliderTilt.value);
+    camSettings.fov = parseFloat(sliderFov.value);
+    
+    valHeight.textContent = camSettings.height.toFixed(1);
+    valBack.textContent = camSettings.backOffset.toFixed(1);
+    valTilt.textContent = camSettings.tiltAngle;
+    valFov.textContent = camSettings.fov;
+    
+    camera.fov = camSettings.fov;
+    camera.updateProjectionMatrix();
+  }
+
+  sliderHeight.addEventListener('input', updateCameraFromSettings);
+  sliderBack.addEventListener('input', updateCameraFromSettings);
+  sliderTilt.addEventListener('input', updateCameraFromSettings);
+  sliderFov.addEventListener('input', updateCameraFromSettings);
+
+  const modeAim = document.getElementById('mode-aim');
+  const modeRoll = document.getElementById('mode-roll');
+  const modeLock = document.getElementById('mode-lock');
+
+  function setCameraMode(mode) {
+    camSettings.mode = mode;
+    modeAim.classList.toggle('active', mode === 'aim');
+    modeRoll.classList.toggle('active', mode === 'roll');
+    modeLock.classList.toggle('active', mode === 'lock');
+  }
+
+  modeAim.addEventListener('click', () => setCameraMode('aim'));
+  modeRoll.addEventListener('click', () => setCameraMode('roll'));
+  modeLock.addEventListener('click', () => setCameraMode('lock'));
+
   const clock = new THREE.Clock();
 
   function isSettled() {
-    if (!window.ballBody) return true;
-    const ballSpeed = window.ballBody.velocity.length();
-    const ballPastPins = window.ballBody.position.z > FOUL_TO_HEAD_PIN + 1.5;
-    const ballInGutter = Math.abs(window.ballBody.position.x) > (LANE_WIDTH / 2 + 0.15);
-    const ballFallen = window.ballBody.position.y < -0.5;
-    const ballFarAway = window.ballBody.position.z > 25;
+    const ballSpeed = ballBody.velocity.length();
+    const ballPastPins = ballBody.position.z > FOUL_TO_HEAD_PIN + 1.5;
+    const ballInGutter = Math.abs(ballBody.position.x) > (LANE_WIDTH / 2 + 0.15);
+    const ballFallen = ballBody.position.y < -0.5;
+    const ballFarAway = ballBody.position.z > 25;
 
     if (ballFarAway) return true;
     if (!ballPastPins && !ballInGutter && !ballFallen) {
       if (ballSpeed > 0.25) return false;
     }
-    for (const pin of (window.pins || [])) {
+    for (const pin of pins) {
       const pinSpeed = pin.body.velocity.length();
       const pinAngSpeed = pin.body.angularVelocity.length();
       if (pinSpeed > 0.1 || pinAngSpeed > 0.1) return false;
@@ -1253,14 +1258,31 @@
 
   function updateCamera(dt) {
     let targetPos, targetLook;
-    const bp = window.ballBody ? window.ballBody.position : { x: 0, y: 0, z: -0.3 };
+    const lockDistance = FOUL_TO_HEAD_PIN * 0.75;
+    const bp = ballBody.position;
     
+    const tiltRad = camSettings.tiltAngle * Math.PI / 180;
+    const lookDistance = 10;
+    const lookY = Math.sin(tiltRad) * lookDistance + 0.3;
+    const lookZ = Math.cos(tiltRad) * lookDistance;
+
     if (gameState.phase === 'AIMING') {
-      targetPos = new THREE.Vector3(0, 1.8, -2.5);
-      targetLook = new THREE.Vector3(0, 0.3, 10);
+      targetPos = new THREE.Vector3(0, camSettings.height, camSettings.backOffset);
+      targetLook = new THREE.Vector3(0, lookY, lookZ);
+    } else if (gameState.phase === 'ROLLING' || gameState.phase === 'SETTLING') {
+      if (camSettings.mode === 'lock' || bp.z > lockDistance) {
+        targetPos = new THREE.Vector3(0, camSettings.height, FOUL_TO_HEAD_PIN - 3);
+        targetLook = new THREE.Vector3(PIN_CENTER_OFFSET_X, 0.2, FOUL_TO_HEAD_PIN + 0.5);
+      } else if (camSettings.mode === 'roll') {
+        targetPos = new THREE.Vector3(bp.x * 0.3, camSettings.height, Math.max(bp.z - 4.5, camSettings.backOffset));
+        targetLook = new THREE.Vector3(bp.x * 0.4, 0.3, bp.z + 8);
+      } else {
+        targetPos = new THREE.Vector3(bp.x * 0.3, camSettings.height, Math.max(bp.z - 4.5, camSettings.backOffset));
+        targetLook = new THREE.Vector3(bp.x * 0.4, lookY, bp.z + 8);
+      }
     } else {
-      targetPos = new THREE.Vector3(bp.x * 0.3, 1.8, Math.max(bp.z - 4.5, -2.5));
-      targetLook = new THREE.Vector3(bp.x * 0.4, 0.3, bp.z + 8);
+      targetPos = new THREE.Vector3(0, camSettings.height, camSettings.backOffset);
+      targetLook = new THREE.Vector3(0, lookY, lookZ);
     }
     
     const lerpSpeed = 0.05;
@@ -1273,42 +1295,33 @@
   function animate() {
     requestAnimationFrame(animate);
     const dt = Math.min(clock.getDelta(), 1 / 30);
-    
-    if (world) {
-      world.step(1 / 60, dt, 3);
-    }
+    world.step(1 / 60, dt, 3);
 
-    if (window.pins) {
-      for (const pin of window.pins) {
-        pin.mesh.position.set(pin.body.position.x, pin.body.position.y, pin.body.position.z);
-        pin.mesh.quaternion.set(pin.body.quaternion.x, pin.body.quaternion.y, pin.body.quaternion.z, pin.body.quaternion.w);
-      }
+    for (const pin of pins) {
+      pin.mesh.position.set(pin.body.position.x, pin.body.position.y, pin.body.position.z);
+      pin.mesh.quaternion.set(pin.body.quaternion.x, pin.body.quaternion.y, pin.body.quaternion.z, pin.body.quaternion.w);
     }
-    
-    if (window.ballMesh && window.ballBody) {
-      window.ballMesh.position.set(window.ballBody.position.x, window.ballBody.position.y, window.ballBody.position.z);
-      window.ballMesh.quaternion.set(window.ballBody.quaternion.x, window.ballBody.quaternion.y, window.ballBody.quaternion.z, window.ballBody.quaternion.w);
-    }
+    ballMesh.position.set(ballBody.position.x, ballBody.position.y, ballBody.position.z);
+    ballMesh.quaternion.set(ballBody.quaternion.x, ballBody.quaternion.y, ballBody.quaternion.z, ballBody.quaternion.w);
 
     if (gameState.phase === 'ROLLING') {
       gameState.rollTimer += dt;
       
-      if (window.ballBody && window.ballBody.position.y < -1) {
-        window.ballBody.position.y = BALL_RADIUS;
-        window.ballBody.velocity.y = 0;
+      const ballFallen = ballBody.position.y < -0.5;
+      const ballFarAway = ballBody.position.z > 25;
+      
+      if (ballBody.position.y < -1) {
+        ballBody.position.y = BALL_RADIUS;
+        ballBody.velocity.y = 0;
       }
 
-      if (gameState.rollTimer >= 3.0 || 
-          (window.ballBody && window.ballBody.position.y < -0.5) || 
-          (window.ballBody && window.ballBody.position.z > 25)) {
+      if (gameState.rollTimer >= 3.0 || ballFallen || ballFarAway) {
         gameState.phase = 'SETTLING';
         gameState.settleTimer = 0;
       }
     } else if (gameState.phase === 'SETTLING') {
       gameState.settleTimer += dt;
-      // Wait for pins to settle: at least 1.5s after roll ends + pins must be still
-      const SETTLE_WAIT_TIME = 1.5;
-      if (gameState.settleTimer > SETTLE_WAIT_TIME && isSettled()) {
+      if (gameState.settleTimer > 0.5) {
         onRollComplete();
       }
     }
@@ -1320,21 +1333,25 @@
   function resetGame() {
     rolls.length = 0;
     for (const f of gameState.frames) f.rolls.length = 0;
-    gameState.currentFrame = 0;
+    gameState.currentFrame = 0; 
     gameState.currentRollInFrame = 0;
-    gameState.pinsStandingBeforeRoll = 10;
-    gameState.phase = 'AIMING';
+    gameState.pinsStandingBeforeRoll = 10; 
+    gameState.phase = 'AIMING'; 
     gameState.needsPinReset = true;
     gameState.rollTimer = 0;
     gameState.settleTimer = 0;
-    gameState.gameOver = false;
-    gameState.hasSubmitted = false;
-    if (window.resetPins) window.resetPins();
-    if (window.resetBall) window.resetBall();
-    updateScoreboard();
+    resetPins(); 
+    resetBall(); 
+    updateScoreboard(); 
     updateInfo();
     document.getElementById('game-over').classList.remove('show');
-    hideWaitingOverlay();
+    hideWaitingMessage();
+    
+    if (api && matchUuid) { // ИСПРАВЛЕНО: использование matchUuid
+      checkInitialTurn();
+    } else {
+      gameState.isMyTurn = true;
+    }
   }
 
   document.getElementById('reset-btn').addEventListener('click', resetGame);
@@ -1342,66 +1359,15 @@
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 100));
 
-  // ── Start everything ──
-  async function startApp() {
-    // Wait for CANNON to load
-    if (typeof CANNON === 'undefined') {
-      await new Promise((resolve) => {
-        const check = () => {
-          if (typeof CANNON !== 'undefined') {
-            useCannon = true;
-            resolve();
-          } else if (document.querySelector('script[src*="cannon-es"]')?.dataset?.loaded) {
-            useCannon = true;
-            resolve();
-          } else {
-            setTimeout(check, 100);
-          }
-        };
-        check();
-      });
-    }
-    
-    buildScene();
-    
-    // Wait for scene to be ready
-    while (!sceneReady) {
-      await new Promise(r => setTimeout(r, 100));
-    }
-    
-    // Initialize Telegram
-    await initTelegram();
-    
-    resize();
-    updateScoreboard();
-    updateInfo();
-
-    // If not in Telegram or no game params, just run as standalone
-    if (!gameId || !playerId) {
-      document.getElementById('loading').style.display = 'none';
-      console.log('Running in standalone mode (no Telegram)');
-    } else {
-      console.log('Running in Telegram mode');
-    }
-
-    animate();
-  }
-
-  // Error handling for loading
-  setTimeout(() => {
-    if (!sceneReady) {
-      // If still not ready after 5 seconds, show scene anyway
-      document.getElementById('loading').style.display = 'none';
-      resize();
-      animate();
-    }
-  }, 5000);
-
-  startApp().catch(err => {
-    console.error('Startup error:', err);
-    document.getElementById('loading').style.display = 'none';
-    showError(err.message);
-  });
+  resize();
+  resetPins();
+  resetBall();
+  updateScoreboard();
+  updateInfo();
+  document.getElementById('loading').style.display = 'none';
+  
+  initTelegramAndNetwork();
+  animate();
 </script>
 </body>
 </html>
