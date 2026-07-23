@@ -65,12 +65,12 @@
     <div id="info">Ваш ход</div>
     <div id="power-meter"><div id="power-fill"></div></div>
     <div id="message"></div>
-    <div id="instructions">Тяните ВВЕРХ для силы<br>ВЛЕКО/ВПРАВО для прицела</div>
+    <div id="instructions">Тяните ВВЕРХ для силы<br>ВЛЕВО/ВПРАВО для прицела</div>
   </div>
   <div id="waiting-overlay">
     <div class="spinner"></div>
     <div id="waiting-text">Сейчас не ваш ход.</div>
-    <div style="margin-top: 10px; font-size: 14px; opacity: 0.7;">Закройте это окно и дождитесь своей ссылки в чате.</div>
+    <div style="margin-top: 10px; font-size: 14px; opacity: 0.7;">Закройте это окно и дождитесь своей кнопки в чате.</div>
   </div>
 </div>
 
@@ -102,35 +102,50 @@
   tg.expand();
   log("Telegram WebApp готов");
 
-  // Читаем параметры из HASH (#game=...&player=...)
-  const hashParams = new URLSearchParams(window.location.hash.substring(1));
-  const gameId = hashParams.get('game');
-  const expectedPlayerId = parseInt(hashParams.get('player'));
-  const currentFrameNum = parseInt(hashParams.get('frame'));
-  const p1Score = parseInt(hashParams.get('p1_score'));
-  const p2Score = parseInt(hashParams.get('p2_score'));
-  
+  // Читаем start_param (работает ТОЛЬКО с кнопками WebApp!)
+  const startParam = tg.initDataUnsafe.start_param;
+  log(`start_param: ${startParam || 'НЕ НАЙДЕН'}`);
+
+  let gameId = '';
+  let expectedPlayerId = 0;
+  let currentFrameNum = 1;
+  let p1Score = 0;
+  let p2Score = 0;
   let isMyTurn = false;
   let opponentTotal = 0;
 
-  log(`Hash: ${window.location.hash}`);
-  log(`Game ID: ${gameId || 'НЕ НАЙДЕН'}`);
-  log(`Expected Player ID: ${expectedPlayerId || 'НЕ НАЙДЕН'}`);
-  log(`Frame: ${currentFrameNum || '1'}`);
+  if (startParam) {
+    const parts = startParam.split('_');
+    if (parts.length >= 5) {
+      gameId = parts[0];
+      expectedPlayerId = parseInt(parts[1]);
+      currentFrameNum = parseInt(parts[2]);
+      p1Score = parseInt(parts[3]);
+      p2Score = parseInt(parts[4]);
+      
+      log(`Game ID: ${gameId}`);
+      log(`Expected Player ID: ${expectedPlayerId}`);
+      log(`Frame: ${currentFrameNum}`);
+      log(`P1 Score: ${p1Score}, P2 Score: ${p2Score}`);
+    } else {
+      log("ОШИБКА: Неверный формат start_param", "error");
+    }
+  }
 
+  const myUserId = tg.initDataUnsafe?.user?.id;
+  log(`My User ID: ${myUserId}`);
+
+  // ==========================================
+  // 2. ИГРОВОЕ СОСТОЯНИЕ
+  // ==========================================
   const gameState = {
     frames: Array(10).fill(null).map(() => ({ rolls: [] })),
-    currentFrame: 0,
+    currentFrame: currentFrameNum - 1,
     phase: 'WAITING',
     rollTimer: 0
   };
 
-  if (gameId && expectedPlayerId) {
-    gameState.currentFrame = currentFrameNum - 1;
-    
-    const myUserId = tg.initDataUnsafe?.user?.id;
-    log(`My User ID: ${myUserId}`);
-    
+  if (gameId && expectedPlayerId && myUserId) {
     opponentTotal = (myUserId === expectedPlayerId) ? p2Score : p1Score;
     
     if (myUserId === expectedPlayerId) {
@@ -144,14 +159,14 @@
       document.getElementById('canvas').style.pointerEvents = 'none';
     }
   } else {
-    log("ОШИБКА: Параметры игры не найдены в URL", "error");
+    log("ОШИБКА: Параметры игры не найдены", "error");
     document.getElementById('waiting-overlay').classList.add('show');
-    document.getElementById('waiting-text').textContent = "Ошибка: неверная ссылка";
+    document.getElementById('waiting-text').textContent = "Ошибка: неверные параметры";
     document.getElementById('canvas').style.pointerEvents = 'none';
   }
 
   // ==========================================
-  // 2. ЛОГИКА ИГРЫ И СОСТОЯНИЕ
+  // 3. ЛОГИКА ИГРЫ
   // ==========================================
   function isFrameComplete(frameIndex) {
     const rolls = gameState.frames[frameIndex].rolls;
@@ -217,7 +232,6 @@
     log(`=== ПОДГОТОВКА К ОТПРАВКЕ ===`);
     log(`Фрейм: ${gameState.currentFrame}, Броски: ${rolls.join(',')}, Последний: ${isLast}`);
 
-    const myUserId = tg.initDataUnsafe?.user?.id;
     let payload = {};
     
     if (isLast) {
@@ -254,7 +268,7 @@
   }
 
   // ==========================================
-  // 3. 3D ФИЗИКА И РЕНДЕРИНГ
+  // 4. 3D ФИЗИКА И РЕНДЕРИНГ
   // ==========================================
   const canvas = document.getElementById('canvas');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -307,7 +321,7 @@
   }
 
   // ==========================================
-  // 4. УПРАВЛЕНИЕ И ИГРОВОЙ ЦИКЛ
+  // 5. УПРАВЛЕНИЕ И ИГРОВОЙ ЦИКЛ
   // ==========================================
   let touchStart = null, aimAngle = 0, throwPower = 0;
   
