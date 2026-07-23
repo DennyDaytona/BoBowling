@@ -39,7 +39,6 @@
   #power-fill { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, #00cc44, #ffcc00, #ff3300); height: 0%; }
   #instructions { position: absolute; bottom: 20px; right: 16px; color: rgba(255,255,255,0.8); font-size: 12px; text-align: right; background: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 6px; pointer-events: auto; }
 
-  /* ВСТРОЕННАЯ КОНСОЛЬ ОТЛАДКИ */
   #debug-console {
     position: fixed; bottom: 0; left: 0; right: 0;
     background: rgba(0, 0, 0, 0.9);
@@ -75,7 +74,6 @@
   </div>
 </div>
 
-<!-- Консоль отладки прямо на экране -->
 <div id="debug-console"></div>
 
 <script type="module">
@@ -83,7 +81,7 @@
   import * as CANNON from 'cannon-es';
 
   // ==========================================
-  // 0. ВСТРОЕННАЯ КОНСОЛЬ ОТЛАДКИ (Вместо F12)
+  // 0. ВСТРОЕННАЯ КОНСОЛЬ ОТЛАДКИ
   // ==========================================
   const debugDiv = document.getElementById('debug-console');
   function log(msg, type = 'info') {
@@ -92,7 +90,7 @@
     div.textContent = `> ${msg}`;
     debugDiv.appendChild(div);
     debugDiv.scrollTop = debugDiv.scrollHeight;
-    console.log(msg); // Дублируем в настоящую консоль, если она есть
+    console.log(msg);
   }
   log("Mini App запущен");
 
@@ -104,49 +102,43 @@
   tg.expand();
   log("Telegram WebApp готов");
 
+  // Читаем параметры ИЗ URL (не из start_param!)
   const urlParams = new URLSearchParams(window.location.search);
-  const startParam = urlParams.get('start_param') || tg.initDataUnsafe?.start_param;
+  const gameId = urlParams.get('game');
+  const expectedPlayerId = parseInt(urlParams.get('player'));
+  const currentFrameNum = parseInt(urlParams.get('frame'));
+  const p1Score = parseInt(urlParams.get('p1_score'));
+  const p2Score = parseInt(urlParams.get('p2_score'));
   
-  let gameId = '';
-  let expectedPlayerId = 0;
   let isMyTurn = false;
   let opponentTotal = 0;
 
-  log(`URL Start Param: ${startParam || 'НЕ НАЙДЕН'}`);
+  log(`Game ID: ${gameId || 'НЕ НАЙДЕН'}`);
+  log(`Expected Player ID: ${expectedPlayerId || 'НЕ НАЙДЕН'}`);
+  log(`Frame: ${currentFrameNum || '1'}`);
 
-  if (startParam) {
-    const parts = startParam.split('_');
-    if (parts.length >= 5) {
-      gameId = parts[0];
-      expectedPlayerId = parseInt(parts[1]);
-      const currentFrameNum = parseInt(parts[2]);
-      const p1TotalParam = parseInt(parts[3]);
-      const p2TotalParam = parseInt(parts[4]);
-      
-      gameState.currentFrame = currentFrameNum - 1;
-      
-      const myUserIdCheck = tg.initDataUnsafe?.user?.id;
-      opponentTotal = (myUserIdCheck === expectedPlayerId) ? p2TotalParam : p1TotalParam;
-      log(`Распарсено: Game=${gameId}, ExpectedID=${expectedPlayerId}, Frame=${currentFrameNum}`);
+  if (gameId && expectedPlayerId) {
+    gameState.currentFrame = currentFrameNum - 1;
+    
+    const myUserId = tg.initDataUnsafe?.user?.id;
+    log(`My User ID: ${myUserId}`);
+    
+    opponentTotal = (myUserId === expectedPlayerId) ? p2Score : p1Score;
+    
+    if (myUserId === expectedPlayerId) {
+      isMyTurn = true;
+      log("ХОД ПОДТВЕРЖДЕН. Игра активна.");
     } else {
-      log("ОШИБКА: Неверный формат start_param", "error");
+      isMyTurn = false;
+      log(`БЛОКИРОВКА: Мой ID (${myUserId}) не совпадает с ожидаемым (${expectedPlayerId})`, "warn");
+      document.getElementById('waiting-overlay').classList.add('show');
+      document.getElementById('canvas').style.pointerEvents = 'none';
     }
   } else {
-    log("ОШИБКА: start_param отсутствует в URL", "error");
-  }
-
-  const myUserId = tg.initDataUnsafe?.user?.id;
-  log(`My User ID: ${myUserId}`);
-  
-  // КРИТИЧЕСКАЯ ПРОВЕРКА: Если ID не совпадает, блокируем всё
-  if (myUserId !== expectedPlayerId) {
-    isMyTurn = false;
-    log("БЛОКИРОВКА: Это не ваш ход!", "warn");
+    log("ОШИБКА: Параметры игры не найдены в URL", "error");
     document.getElementById('waiting-overlay').classList.add('show');
+    document.getElementById('waiting-text').textContent = "Ошибка: неверная ссылка";
     document.getElementById('canvas').style.pointerEvents = 'none';
-  } else {
-    isMyTurn = true;
-    log("ХОД ПОДТВЕРЖДЕН. Игра активна.");
   }
 
   // ==========================================
@@ -223,16 +215,18 @@
     log(`=== ПОДГОТОВКА К ОТПРАВКЕ ===`);
     log(`Фрейм: ${gameState.currentFrame}, Броски: ${rolls.join(',')}, Последний: ${isLast}`);
 
+    const myUserId = tg.initDataUnsafe?.user?.id;
     let payload = {};
+    
     if (isLast) {
-      const isPlayer1 = (myUserId === expectedPlayerId); // Упрощенная проверка
+      const isPlayer1 = (myUserId === expectedPlayerId);
       payload = { 
         action: "game_end", 
         game_id: gameId, 
         player_id: myUserId, 
         winner_id: myUserId, 
-        p1_final: isPlayer1 ? newTotal : opponentTotal, 
-        p2_final: isPlayer1 ? opponentTotal : newTotal
+        p1_final: isPlayer1 ? newTotal : p2Score, 
+        p2_final: isPlayer1 ? p1Score : newTotal
       };
     } else {
       payload = { 
@@ -258,7 +252,7 @@
   }
 
   // ==========================================
-  // 3. 3D ФИЗИКА И РЕНДЕРИНГ (Базовая сцена)
+  // 3. 3D ФИЗИКА И РЕНДЕРИНГ
   // ==========================================
   const canvas = document.getElementById('canvas');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
