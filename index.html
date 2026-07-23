@@ -65,7 +65,7 @@
     <div id="info">Ваш ход</div>
     <div id="power-meter"><div id="power-fill"></div></div>
     <div id="message"></div>
-    <div id="instructions">Тяните ВВЕРХ для силы<br>ВЛЕВО/ВПРАВО для прицела</div>
+    <div id="instructions">Тяните ВВЕРХ для силы<br>ВЛЕКО/ВПРАВО для прицела</div>
   </div>
   <div id="waiting-overlay">
     <div class="spinner"></div>
@@ -102,20 +102,28 @@
   tg.expand();
   log("Telegram WebApp готов");
 
-  // Читаем параметры ИЗ URL (не из start_param!)
-  const urlParams = new URLSearchParams(window.location.search);
-  const gameId = urlParams.get('game');
-  const expectedPlayerId = parseInt(urlParams.get('player'));
-  const currentFrameNum = parseInt(urlParams.get('frame'));
-  const p1Score = parseInt(urlParams.get('p1_score'));
-  const p2Score = parseInt(urlParams.get('p2_score'));
+  // Читаем параметры из HASH (#game=...&player=...)
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const gameId = hashParams.get('game');
+  const expectedPlayerId = parseInt(hashParams.get('player'));
+  const currentFrameNum = parseInt(hashParams.get('frame'));
+  const p1Score = parseInt(hashParams.get('p1_score'));
+  const p2Score = parseInt(hashParams.get('p2_score'));
   
   let isMyTurn = false;
   let opponentTotal = 0;
 
+  log(`Hash: ${window.location.hash}`);
   log(`Game ID: ${gameId || 'НЕ НАЙДЕН'}`);
   log(`Expected Player ID: ${expectedPlayerId || 'НЕ НАЙДЕН'}`);
   log(`Frame: ${currentFrameNum || '1'}`);
+
+  const gameState = {
+    frames: Array(10).fill(null).map(() => ({ rolls: [] })),
+    currentFrame: 0,
+    phase: 'WAITING',
+    rollTimer: 0
+  };
 
   if (gameId && expectedPlayerId) {
     gameState.currentFrame = currentFrameNum - 1;
@@ -127,6 +135,7 @@
     
     if (myUserId === expectedPlayerId) {
       isMyTurn = true;
+      gameState.phase = 'AIMING';
       log("ХОД ПОДТВЕРЖДЕН. Игра активна.");
     } else {
       isMyTurn = false;
@@ -144,13 +153,6 @@
   // ==========================================
   // 2. ЛОГИКА ИГРЫ И СОСТОЯНИЕ
   // ==========================================
-  const gameState = {
-    frames: Array(10).fill(null).map(() => ({ rolls: [] })),
-    currentFrame: 0,
-    phase: isMyTurn ? 'AIMING' : 'WAITING',
-    rollTimer: 0
-  };
-
   function isFrameComplete(frameIndex) {
     const rolls = gameState.frames[frameIndex].rolls;
     if (frameIndex < 9) return rolls.length === 1 && rolls[0] === 10 ? true : rolls.length === 2;
